@@ -3,10 +3,12 @@ package spotify
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -15,11 +17,26 @@ import (
 	"github.com/amonks/genres/request"
 )
 
+const nextReqFilename = "next-req"
+
 // New creates a new Spotify client, with the given clientID and clientSecret.
 func New(clientID, clientSecret string) *Client {
+	var nextReqAt time.Time
+	if _, err := os.Stat(nextReqFilename); !errors.Is(err, os.ErrNotExist) {
+		bs, err := os.ReadFile(nextReqFilename)
+		if err != nil {
+			panic(err)
+		}
+		nextReqAt, err = time.Parse(time.UnixDate, string(bs))
+		if err != nil {
+			panic(err)
+		}
+	}
 	return &Client{
 		clientID:     clientID,
 		clientSecret: clientSecret,
+		nextReqAt:    nextReqAt,
+		delay:        time.Second / 10,
 	}
 }
 
@@ -28,6 +45,7 @@ type Client struct {
 	clientSecret string
 
 	nextReqAt time.Time
+	delay     time.Duration
 
 	accessToken string
 	expiresAt   time.Time
@@ -93,8 +111,17 @@ func (spo *Client) FetchGenre(name string) ([]data.Artist, error) {
 func (spo *Client) fetchGenrePage(name string, offset int) (*genreSearchResults, error) {
 retry:
 	if !spo.nextReqAt.IsZero() {
-		<-time.After(time.Until(spo.nextReqAt))
-		spo.nextReqAt = time.Time{}
+		for time.Now().Before(spo.nextReqAt.Add(-time.Minute)) {
+			until := time.Until(spo.nextReqAt)
+			log.Printf("next request in %s", until.Truncate(time.Second))
+			time.Sleep(time.Minute)
+		}
+		until := time.Until(spo.nextReqAt)
+		log.Printf("next request in %s", until.Truncate(time.Second))
+		<-time.After(until)
+		if err := os.Remove(nextReqFilename); err != nil {
+			panic(err)
+		}
 	}
 
 	url, _ := url.Parse("https://api.spotify.com/v1/search")
@@ -104,7 +131,6 @@ retry:
 	query.Add("limit", "50")
 	query.Add("offset", fmt.Sprintf("%d", offset))
 	url.RawQuery = query.Encode()
-
 	req, err := http.NewRequest("GET", url.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("genre request error: %w", err)
@@ -114,13 +140,14 @@ retry:
 	if err != nil {
 		return nil, err
 	}
-
 	req.Header.Set("Authorization", token)
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("genre request error: %w", err)
 	}
 	if resp.StatusCode == 429 {
+		spo.delay = 2 * spo.delay
 		if retryAfter := resp.Header.Get("Retry-After"); retryAfter == "" {
 			log.Printf("no retry-after header on 429; retrying in 1 minute")
 			spo.nextReqAt = time.Now().Add(time.Minute)
@@ -132,6 +159,9 @@ retry:
 			waitTime := time.Duration(seconds)*time.Second + time.Second
 			log.Printf("429; retrying in %s", waitTime)
 			spo.nextReqAt = time.Now().Add(waitTime)
+		}
+		if err := os.WriteFile(nextReqFilename, []byte(spo.nextReqAt.Format(time.UnixDate)), 0666); err != nil {
+			return nil, err
 		}
 		goto retry
 	}
@@ -146,7 +176,7 @@ retry:
 		return nil, fmt.Errorf("genre decode error: %w", err)
 	}
 
-	time.Sleep(time.Second / 10)
+	spo.nextReqAt = time.Now().Add(spo.delay)
 
 	return &results, nil
 }
