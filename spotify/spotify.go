@@ -118,7 +118,10 @@ retry:
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
 
-		log.Printf("next request in %s", spo.nextReqAt.Sub(time.Now()).Truncate(time.Second))
+		now := time.Now()
+		if spo.nextReqAt.Sub(now) > time.Second {
+			log.Printf("next request in %s", spo.nextReqAt.Sub(now).Truncate(time.Second))
+		}
 	wait:
 		for {
 			select {
