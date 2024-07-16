@@ -1,6 +1,7 @@
 package spotify
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -61,10 +62,13 @@ type Client struct {
 // FetchGenre respects Spotify's documented semantics around its rate limiter:
 // checking for a Retry-After header when it receives a 429 response. If
 // FetchGenre is rate limited, it won't error, but it might take a long time.
-func (spo *Client) FetchGenre(name string) ([]data.Artist, error) {
+func (spo *Client) FetchGenre(ctx context.Context, name string) ([]data.Artist, error) {
 	var artists []data.Artist
 	for offset := 0; offset < 1000; offset += 50 {
-		resp, err := spo.fetchGenrePage(name, offset)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		resp, err := spo.fetchGenrePage(ctx, name, offset)
 		if err != nil {
 			return nil, err
 		}
@@ -108,18 +112,25 @@ func (spo *Client) FetchGenre(name string) ([]data.Artist, error) {
 	return artists, nil
 }
 
-func (spo *Client) fetchGenrePage(name string, offset int) (*genreSearchResults, error) {
+func (spo *Client) fetchGenrePage(ctx context.Context, name string, offset int) (*genreSearchResults, error) {
 retry:
 	if !spo.nextReqAt.IsZero() {
-		for time.Now().Before(spo.nextReqAt.Add(-time.Minute)) {
-			until := time.Until(spo.nextReqAt)
-			log.Printf("next request in %s", until.Truncate(time.Second))
-			time.Sleep(time.Minute)
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+
+		log.Printf("next request in %s", spo.nextReqAt.Sub(time.Now()).Truncate(time.Second))
+	wait:
+		for {
+			select {
+			case now := <-ticker.C:
+				log.Printf("next request in %s", spo.nextReqAt.Sub(now).Truncate(time.Second))
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(time.Until(spo.nextReqAt)):
+				break wait
+			}
 		}
-		until := time.Until(spo.nextReqAt)
-		log.Printf("next request in %s", until.Truncate(time.Second))
-		<-time.After(until)
-		if err := os.Remove(nextReqFilename); err != nil {
+		if err := os.Remove(nextReqFilename); err != nil && !errors.Is(err, os.ErrNotExist) {
 			panic(err)
 		}
 	}

@@ -5,6 +5,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -12,28 +14,41 @@ import (
 	"github.com/amonks/genres/data"
 	"github.com/amonks/genres/db"
 	"github.com/amonks/genres/enao"
+	"github.com/amonks/genres/sigctx"
 	"github.com/amonks/genres/spotify"
 )
 
 func main() {
-	if err := run(); err != nil {
+	if err := run(); err != nil && !errors.Is(err, context.Canceled) {
 		panic(err)
+	} else if err != nil {
+		fmt.Println("canceled")
+	} else {
+		fmt.Println("done")
 	}
-	fmt.Println("done")
 }
 
 func run() error {
+	ctx := sigctx.New()
+
 	db, err := db.Open("genres.db")
 	if err != nil {
 		return err
 	}
+	defer func() {
+		pool, err := db.DB.DB()
+		if err != nil {
+			panic(err)
+		}
+		pool.Close()
+	}()
 
 	spo := spotify.New(os.Getenv("SPOTIFY_CLIENT_ID"), os.Getenv("SPOTIFY_CLIENT_SECRET"))
 
 	if err := populateGenres(db); err != nil {
 		return err
 	}
-	if err := populateArtists(db, spo); err != nil {
+	if err := populateArtists(ctx, db, spo); err != nil {
 		return err
 	}
 
@@ -55,7 +70,7 @@ func populateGenres(db *db.DB) error {
 	return nil
 }
 
-func populateArtists(db *db.DB, spo *spotify.Client) error {
+func populateArtists(ctx context.Context, db *db.DB, spo *spotify.Client) error {
 	genres := []data.Genre{}
 	if err := db.Find(&genres).Error; err != nil {
 		return err
@@ -64,7 +79,11 @@ func populateArtists(db *db.DB, spo *spotify.Client) error {
 	allArtists := map[string]struct{}{}
 
 	for i, genre := range genres {
-		artists, err := spo.FetchGenre(genre.Name)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		artists, err := spo.FetchGenre(ctx, genre.Name)
 		if err != nil {
 			return err
 		}
