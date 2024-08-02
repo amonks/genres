@@ -25,6 +25,8 @@ type Genre struct {
 
 	// A value in the range [0, 4096], derived from the ENAO visualization.
 	Organicness, Bounciness, Popularity int64
+
+	HasFetchedArtists bool
 }
 
 // Artists holds the artists we've found using Spotify's search API. We try to
@@ -42,6 +44,34 @@ type Artist struct {
 	Followers  int64
 	Popularity int64
 	Genres     []string `gorm:"-"`
+
+	HasFetchedTracks bool
+	HasFetchedAlbums bool
+}
+
+type Album struct {
+	SpotifyID string
+	Name      string
+	Type      string
+	ImageURL  string
+
+	TotalTracks      int64
+	HasFetchedTracks bool
+
+	ReleaseDate          string
+	ReleaseDatePrecision string
+
+	Artists []Artist `gorm:"-"`
+}
+
+type AlbumArtist struct {
+	ArtistSpotifyID string
+	AlbumSpotifyID  string
+}
+
+type AlbumTrack struct {
+	TrackSpotifyID string
+	AlbumSpotifyID  string
 }
 
 // artists_rtree stores the bounds of each artist within 5-dimensional genre
@@ -70,4 +100,40 @@ type ArtistRtree struct {
 type ArtistGenre struct {
 	ArtistSpotifyID string
 	GenreName       string
+}
+
+type Track struct {
+	SpotifyID  string
+	Name       string
+	PreviewURL string
+	DurationMS int64
+	Popularity int64
+
+	AlbumSpotifyID string
+	AlbumName      string
+	DiscNumber     int64
+	TrackNumber    int64
+
+	Artists []Artist `gorm:"-"`
+
+	HasAnalysis bool
+
+	Key           int64
+	Mode          int64
+	Tempo         float64
+	TimeSignature int64
+
+	Acousticness     float64
+	Danceability     float64
+	Energy           float64
+	Instrumentalness float64
+	Liveness         float64
+	Loudness         float64
+	Speechiness      float64
+	Valence          float64
+}
+
+type TrackArtist struct {
+	TrackSpotifyID  string
+	ArtistSpotifyID string
 }

@@ -6,14 +6,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os"
 
-	"github.com/amonks/genres/data"
 	"github.com/amonks/genres/db"
-	"github.com/amonks/genres/enao"
+	"github.com/amonks/genres/fetcher"
 	"github.com/amonks/genres/sigctx"
 	"github.com/amonks/genres/spotify"
 )
@@ -45,61 +46,36 @@ func run() error {
 
 	spo := spotify.New(os.Getenv("SPOTIFY_CLIENT_ID"), os.Getenv("SPOTIFY_CLIENT_SECRET"))
 
-	if err := populateGenres(db); err != nil {
-		return err
+	f := fetcher.New(db, spo)
+
+	flag.Parse()
+	operation := "fetch"
+	if args := flag.Args(); len(args) >= 1 {
+		operation = args[0]
 	}
-	if err := populateArtists(ctx, db, spo); err != nil {
-		return err
-	}
+	switch operation {
 
-	return nil
-}
-
-func populateGenres(db *db.DB) error {
-	genres, err := enao.AllGenres()
-	if err != nil {
-		return err
-	}
-
-	for _, genre := range genres {
-		if err := db.InsertGenre(genre); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func populateArtists(ctx context.Context, db *db.DB, spo *spotify.Client) error {
-	genres := []data.Genre{}
-	if err := db.Find(&genres).Error; err != nil {
-		return err
-	}
-
-	allArtists := map[string]struct{}{}
-
-	for i, genre := range genres {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		artists, err := spo.FetchGenre(ctx, genre.Name)
+	case "enumerate-work":
+		todo, err := f.Report()
 		if err != nil {
-			return err
+			return fmt.Errorf("error building fetcher report: %w", err)
 		}
-		if len(artists) == 0 {
-			return fmt.Errorf("no artists for genre '%s'", genre.Name)
-		}
-
-		for _, artist := range artists {
-			allArtists[artist.SpotifyID] = struct{}{}
-			if err := db.InsertArtist(&artist); err != nil {
-				return err
-			}
+		if json, err := json.Marshal(todo); err != nil {
+			return fmt.Errorf("error marshaling fetcher report: %w", err)
+		} else {
+			log.Println(string(json))
 		}
 
-		log.Printf("%s (%d of %d): %d artists (%d total)",
-			genre.Name, i, len(genres), len(artists), len(allArtists))
+	case "fetch":
+		if err := f.Run(ctx); err != nil {
+			return fmt.Errorf("fetch error: %w", err)
+		}
+
+	case "query":
+		// TODO
+
+	default:
+		return fmt.Errorf("unknown operation: '%s'", operation)
 	}
 
 	return nil

@@ -19,8 +19,12 @@ create table if not exists genres (
         organicness       integer,
         bounciness        integer,
 
-        popularity        integer
+        popularity        integer,
+
+        has_fetched_artists boolean not null default false
 );
+
+create index if not exists genres_by_has_fetched_artists on genres ( has_fetched_artists );
 
 -- Artists holds the artists we've found using Spotify's search API. We try to
 -- fetch the thousand first artists returned by a search for each genre.
@@ -35,8 +39,33 @@ create table if not exists artists (
         name       text,
         image_url  text,
         followers  integer,
-        popularity integer
+        popularity integer,
+
+        has_fetched_tracks boolean not null default false,
+        has_fetched_albums boolean not null default false
 );
+
+create index if not exists artists_by_has_fetched_tracks on artists ( has_fetched_tracks );
+create index if not exists artists_by_has_fetched_albums on artists ( has_fetched_albums );
+
+create table if not exists albums (
+        spotify_id   text primary key,
+        name         text,
+
+        -- Allowed values: "album", "single", "compilation"
+        type         text,
+        total_tracks integer,
+        image_url    text,
+
+        -- Example: "1981-12"
+        release_date           text,
+        -- Allowed values: "year", "month", "day"
+        release_date_precision text,
+
+        has_fetched_tracks boolean not null default false
+);
+
+create index if not exists albums_by_has_fetched_tracks on albums ( has_fetched_tracks );
 
 -- artists_rtree stores the bounds of each artist within 5-dimensional genre
 -- space, and can be used for geospatial-style range queries.
@@ -67,3 +96,54 @@ create table if not exists artist_genres (
         primary key (artist_spotify_id, genre_name)
 );
 
+create table if not exists tracks (
+        spotify_id   text primary_key,
+        name         text,
+        preview_url  text,
+        duration_ms  integer,
+        popularity   integer,
+
+        album_spotify_id text,
+        album_name       text,
+        disc_number      integer,
+        track_number     integer,
+
+        has_analysis     boolean not null default false,
+
+        key              integer,
+        mode             integer,
+        tempo            real,
+        time_signature   integer,
+
+        acousticness     real,
+        danceability     real,
+        energy           real,
+        instrumentalness real,
+        liveness         real,
+        loudness         real,
+        speechiness      real,
+        valence          real
+);
+
+create index if not exists tracks_by_has_analysis on tracks ( has_analysis );
+
+create table if not exists track_artists (
+        track_spotify_id  text references tracks(spotify_id),
+        artist_spotify_id text references artists(spotify_id),
+
+        primary key (track_spotify_id, artist_spotify_id)
+);
+
+create table if not exists album_artists (
+        artist_spotify_id text references artists(spotify_id),
+        album_spotify_id  text references albums(spotify_id),
+
+        primary key (artist_spotify_id, album_spotify_id)
+);
+
+create table if not exists album_tracks (
+        album_spotify_id text references albums(spotify_id),
+        track_spotify_id text references tracks(spotify_id),
+
+        primary key (album_spotify_id, track_spotify_id)
+);
