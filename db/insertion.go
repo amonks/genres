@@ -300,6 +300,19 @@ func (db *DB) InsertTrack(ctx context.Context, track *data.Track) error {
 			if err := db.
 				Table("album_tracks").
 				Clauses(clause.OnConflict{DoNothing: true}).
+				Create(&data.Album{
+					SpotifyID: track.AlbumSpotifyID,
+					Name:      track.AlbumName,
+				}).
+				Error; err != nil {
+				return fmt.Errorf("error inserting album track {'%s', '%s'}: %w", track.AlbumName, track.Name, err)
+			}
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("canceled: %w", err)
+			}
+
+			if err := db.
+				Clauses(clause.OnConflict{DoNothing: true}).
 				Create(&data.AlbumTrack{
 					TrackSpotifyID: track.SpotifyID,
 					AlbumSpotifyID: track.AlbumSpotifyID,
