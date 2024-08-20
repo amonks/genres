@@ -11,7 +11,7 @@ import (
 
 func (db *DB) Search(ctx context.Context, query string, limit int) ([]data.Track, error) {
 	var ids []string
-	if err := db.
+	if err := db.ro.
 		Table("tracks_search").
 		Where("content match ?", query).
 		Order("rank").
@@ -37,7 +37,7 @@ func (db *DB) Search(ctx context.Context, query string, limit int) ([]data.Track
 
 func (db *DB) CountTracksToIndex(ctx context.Context) (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("tracks").
 		Where("has_search = false").
 		Count(&count).
@@ -49,7 +49,7 @@ func (db *DB) CountTracksToIndex(ctx context.Context) (int, error) {
 
 func (db *DB) GetTracksToIndex(ctx context.Context, limit int) ([]data.Track, error) {
 	var ids []string
-	if err := db.
+	if err := db.ro.
 		Table("tracks").
 		Where("has_search = false").
 		Limit(limit).
@@ -90,7 +90,7 @@ func (db *DB) IndexTracks(ctx context.Context, tracks []data.Track) error {
 
 	defer db.hold()()
 
-	return db.Transaction(func(tx *gorm.DB) error {
+	return db.rw.Transaction(func(tx *gorm.DB) error {
 		if err := tx.
 			Table("tracks_search").
 			Create(inserts).

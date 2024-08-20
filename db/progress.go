@@ -4,7 +4,7 @@ import "fmt"
 
 func (db *DB) CountGenresToFetchArtists() (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("genres").
 		Where("has_fetched_artists = false").
 		Count(&count).
@@ -16,7 +16,7 @@ func (db *DB) CountGenresToFetchArtists() (int, error) {
 
 func (db *DB) GetGenresToFetchArtists(limit int) ([]string, error) {
 	genreNames := []string{}
-	if err := db.
+	if err := db.ro.
 		Table("genres").
 		Limit(limit).
 		Where("has_fetched_artists = false").
@@ -29,7 +29,7 @@ func (db *DB) GetGenresToFetchArtists(limit int) ([]string, error) {
 
 func (db *DB) CountArtistsToFetchTracks() (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("artists").
 		Where("has_fetched_tracks = false").
 		Count(&count).
@@ -41,7 +41,7 @@ func (db *DB) CountArtistsToFetchTracks() (int, error) {
 
 func (db *DB) GetArtistsToFetchTracks(limit int) ([]string, error) {
 	artists := []string{}
-	if err := db.
+	if err := db.ro.
 		Table("artists").
 		Limit(limit).
 		Where("has_fetched_tracks = false").
@@ -54,7 +54,7 @@ func (db *DB) GetArtistsToFetchTracks(limit int) ([]string, error) {
 
 func (db *DB) CountArtistsToFetchAlbums() (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("artists").
 		Where("has_fetched_albums = false").
 		Count(&count).
@@ -66,7 +66,7 @@ func (db *DB) CountArtistsToFetchAlbums() (int, error) {
 
 func (db *DB) GetArtistsToFetchAlbums(limit int) ([]string, error) {
 	artists := []string{}
-	if err := db.
+	if err := db.ro.
 		Table("artists").
 		Limit(limit).
 		Where("has_fetched_albums = false").
@@ -79,7 +79,7 @@ func (db *DB) GetArtistsToFetchAlbums(limit int) ([]string, error) {
 
 func (db *DB) CountAlbumsToFetchTracks() (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("albums").
 		Where("has_fetched_tracks = false").
 		Count(&count).
@@ -91,7 +91,7 @@ func (db *DB) CountAlbumsToFetchTracks() (int, error) {
 
 func (db *DB) GetAlbumsToFetchTracks(limit int) ([]string, error) {
 	albums := []string{}
-	if err := db.
+	if err := db.ro.
 		Table("albums").
 		Limit(limit).
 		Where("has_fetched_tracks = false").
@@ -104,7 +104,7 @@ func (db *DB) GetAlbumsToFetchTracks(limit int) ([]string, error) {
 
 func (db *DB) CountTracksToFetchAnalysis() (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("tracks").
 		Where("has_analysis = false").
 		Count(&count).
@@ -116,7 +116,7 @@ func (db *DB) CountTracksToFetchAnalysis() (int, error) {
 
 func (db *DB) GetTracksToFetchAnalysis(limit int) ([]string, error) {
 	tracks := []string{}
-	if err := db.
+	if err := db.ro.
 		Table("tracks").
 		Limit(limit).
 		Where("has_analysis = false").
@@ -130,7 +130,7 @@ func (db *DB) GetTracksToFetchAnalysis(limit int) ([]string, error) {
 
 func (db *DB) CountArtistsKnown() (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("artists").
 		Count(&count).
 		Error; err != nil {
@@ -141,7 +141,7 @@ func (db *DB) CountArtistsKnown() (int, error) {
 
 func (db *DB) CountArtistAlbumsDone() (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("artists").
 		Where("has_fetched_albums = true").
 		Count(&count).
@@ -153,7 +153,7 @@ func (db *DB) CountArtistAlbumsDone() (int, error) {
 
 func (db *DB) CountArtistTracksDone() (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("artists").
 		Where("has_fetched_tracks = true").
 		Count(&count).
@@ -165,7 +165,7 @@ func (db *DB) CountArtistTracksDone() (int, error) {
 
 func (db *DB) CountArtistsDone() (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("artists").
 		Where("has_fetched_tracks = true").
 		Where("has_fetched_albums = true").
@@ -178,7 +178,7 @@ func (db *DB) CountArtistsDone() (int, error) {
 
 func (db *DB) CountAlbumsKnown() (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("albums").
 		Count(&count).
 		Error; err != nil {
@@ -189,7 +189,7 @@ func (db *DB) CountAlbumsKnown() (int, error) {
 
 func (db *DB) CountAlbumsDone() (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("albums").
 		Where("has_fetched_tracks = true").
 		Count(&count).
@@ -201,7 +201,7 @@ func (db *DB) CountAlbumsDone() (int, error) {
 
 func (db *DB) CountTracksKnown() (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("tracks").
 		Count(&count).
 		Error; err != nil {
@@ -212,7 +212,7 @@ func (db *DB) CountTracksKnown() (int, error) {
 
 func (db *DB) CountTracksDone() (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("tracks").
 		Where("has_analysis = true").
 		Count(&count).
@@ -224,7 +224,7 @@ func (db *DB) CountTracksDone() (int, error) {
 
 func (db *DB) CountTracksIndexed() (int, error) {
 	var count int64
-	if err := db.
+	if err := db.ro.
 		Table("tracks").
 		Where("has_search = true").
 		Count(&count).

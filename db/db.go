@@ -15,7 +15,9 @@ import (
 
 // DB represents our sqlite3 database file.
 type DB struct {
-	*gorm.DB
+	rw *gorm.DB
+	ro *gorm.DB
+
 	wmu sync.Mutex
 }
 
@@ -31,7 +33,35 @@ var schema string
 // creating the file and running migrations if necessary.
 func Open() (*DB, error) {
 	const filename = "genres.db"
-	gdb, err := gorm.Open(sqlite.Open(filename), &gorm.Config{
+
+	rodb, err := openDB(filename, false)
+	if err != nil {
+		return nil, err
+	}
+
+	rwdb, err := openDB(filename, true)
+	if err != nil {
+		return nil, err
+	}
+
+	db := &DB{
+		ro: rodb,
+		rw: rwdb,
+	}
+
+	if err := db.rw.Exec(schema).Error; err != nil {
+		return nil, fmt.Errorf("error migrating db at '%s': %w", filename, err)
+	}
+
+	return db, nil
+}
+
+func openDB(filename string, rw bool) (*gorm.DB, error) {
+	options := "mode=ro&_query_only=true"
+	if rw {
+		options = "mode=rw&_query_only=false&_txlock=immediate"
+	}
+	db, err := gorm.Open(sqlite.Open(fmt.Sprintf("%s?_journal_mode=wal&_foreign_keys=true&%s", filename, options)), &gorm.Config{
 		Logger: logger.New(
 			log.New(os.Stderr, "\n", log.LstdFlags),
 			logger.Config{
@@ -44,26 +74,37 @@ func Open() (*DB, error) {
 		),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error opening db file at '%s': %w", filename, err)
+		return nil, err
 	}
-
-	db := &DB{
-		DB: gdb,
+	if rw {
+		rawdb, err := db.DB()
+		if err != nil {
+			return nil, err
+		}
+		rawdb.SetMaxOpenConns(1)
 	}
-
-	if err := db.Exec(schema).Error; err != nil {
-		return nil, fmt.Errorf("error migrating db at '%s': %w", filename, err)
-	}
-
 	return db, nil
 }
 
 func (db *DB) Close() error {
 	defer db.hold()()
-	instance, err := db.DB.DB()
+	roinstance, err := db.ro.DB()
 	if err != nil {
 		fmt.Println("error getting db to close:", err)
 		return err
 	}
-	return instance.Close()
+	if err := roinstance.Close(); err != nil {
+		return err
+	}
+
+	rwinstance, err := db.rw.DB()
+	if err != nil {
+		fmt.Println("error getting db to close:", err)
+		return err
+	}
+	if err := rwinstance.Close(); err != nil {
+		return err
+	}
+
+	return nil
 }

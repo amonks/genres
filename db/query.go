@@ -27,7 +27,8 @@ func (db *DB) NearestTracks(ctx context.Context, count int, input data.Vector) (
 		for k, v := range input {
 			terms = append(terms, fmt.Sprintf("pow(tracks.%s - %f, 2.0)", k, v))
 		}
-		q := db.Table("tracks").
+		q := db.ro.
+			Table("tracks").
 			Order(fmt.Sprintf("sqrt(%s) asc", strings.Join(terms, " + "))).
 			Limit(count)
 		for k, v := range input {
@@ -59,7 +60,7 @@ func (db *DB) NearestTracks(ctx context.Context, count int, input data.Vector) (
 
 func (db *DB) GetTrack(ctx context.Context, id string) (*data.Track, error) {
 	var track data.Track
-	if err := db.
+	if err := db.ro.
 		Table("tracks").
 		Where("spotify_id = ?", id).
 		First(&track).
@@ -71,7 +72,7 @@ func (db *DB) GetTrack(ctx context.Context, id string) (*data.Track, error) {
 	}
 
 	var trackArtistIDs []string
-	if err := db.
+	if err := db.ro.
 		Table("track_artists").
 		Where("track_spotify_id = ?", id).
 		Pluck("artist_spotify_id", &trackArtistIDs).
@@ -105,7 +106,7 @@ func (db *DB) GetTrack(ctx context.Context, id string) (*data.Track, error) {
 
 func (db *DB) GetArtist(id string) (*data.Artist, error) {
 	var artist data.Artist
-	if err := db.
+	if err := db.ro.
 		Table("artists").
 		Where("spotify_id = ?", id).
 		First(&artist).
@@ -113,7 +114,7 @@ func (db *DB) GetArtist(id string) (*data.Artist, error) {
 		return nil, fmt.Errorf("error getting artist '%s': %w", id, err)
 	}
 	var genres []string
-	if err := db.
+	if err := db.ro.
 		Table("artist_genres").
 		Where("artist_spotify_id = ?", id).
 		Pluck("genre_name", &genres).
