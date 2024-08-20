@@ -91,7 +91,6 @@ func (vis *Visualization) ToGenres() []*data.Genre {
 		out[i] = &data.Genre{
 			Name:       genre.Name,
 			Key:        genre.Key,
-			PreviewURL: genre.PreviewURL,
 			Example:    genre.Example,
 
 			Energy:           normalize(vis.MinRed, vis.MaxRed, genre.Red()),
@@ -113,9 +112,6 @@ type Genre struct {
 
 	// like "3nzVSyaYk0KNrahyNQS0Ur"
 	Key string
-
-	// like "https://p.scdn.co/mp3-preview/8d9a195ffd681f1e359219b39474b98d820c53c5"
-	PreviewURL string
 
 	// Like `Budapest Chorus "Let the Light Shine on Me"`
 	//

@@ -51,6 +51,14 @@ type Client struct {
 
 	accessToken string
 	expiresAt   time.Time
+
+	reqsThisBatch, reqsThisSession, reqsThisRun int
+}
+
+func (spo *Client) RequestCount() (int, int, int) {
+	a, b, c := spo.reqsThisBatch, spo.reqsThisSession, spo.reqsThisRun
+	spo.reqsThisBatch = 0
+	return a, b, c
 }
 
 func (spo *Client) FetchAlbumsTracks(ctx context.Context, albumSpotifyIDs []string) ([]data.Track, error) {
@@ -83,8 +91,6 @@ func (spo *Client) FetchAlbumsTracks(ctx context.Context, albumSpotifyIDs []stri
 			tracks = append(tracks, data.Track{
 				SpotifyID:  track.ID,
 				Name:       track.Name,
-				PreviewURL: track.PreviewURL,
-				DurationMS: track.DurationMS,
 				Popularity: track.Popularity,
 
 				AlbumSpotifyID: album.ID,
@@ -124,8 +130,6 @@ func (spo *Client) FetchAlbumsTracks(ctx context.Context, albumSpotifyIDs []stri
 				tracks = append(tracks, data.Track{
 					SpotifyID:  track.ID,
 					Name:       track.Name,
-					PreviewURL: track.PreviewURL,
-					DurationMS: track.DurationMS,
 					Popularity: track.Popularity,
 
 					AlbumSpotifyID: album.ID,
@@ -170,8 +174,6 @@ type albumsTracks struct {
 			Items []struct {
 				ID         string
 				Name       string
-				PreviewURL string
-				DurationMS int64
 				Popularity int64
 
 				DiscNumber  int64
@@ -217,8 +219,6 @@ type albumTracksPage struct {
 	Items []struct {
 		ID         string
 		Name       string
-		PreviewURL string
-		DurationMS int64
 		Popularity int64
 
 		DiscNumber  int64
@@ -338,9 +338,14 @@ func (spo *Client) FetchTrackAnalyses(ctx context.Context, ids []string) ([]data
 		return nil, fmt.Errorf("expected %d analyses but got %d", len(ids), len(results.AudioFeatures))
 	}
 
-	tracks := make([]data.Track, len(results.AudioFeatures))
-	for i, track := range results.AudioFeatures {
-		tracks[i] = data.Track{
+	var tracks []data.Track
+	emptyTracks := 0
+	for _, track := range results.AudioFeatures {
+		if track.ID == "" {
+			emptyTracks++
+			continue
+		}
+		tracks = append(tracks, data.Track{
 			SpotifyID: track.ID,
 
 			Key:           track.Key,
@@ -356,7 +361,7 @@ func (spo *Client) FetchTrackAnalyses(ctx context.Context, ids []string) ([]data
 			Loudness:         track.Loudness,
 			Speechiness:      track.Speechiness,
 			Valence:          track.Valence,
-		}
+		})
 	}
 
 	return tracks, nil
@@ -400,8 +405,6 @@ func (spo *Client) FetchArtistTracks(ctx context.Context, artistID string) ([]da
 		tracks[i] = data.Track{
 			SpotifyID:  track.ID,
 			Name:       track.Name,
-			PreviewURL: track.PreviewURL,
-			DurationMS: track.DurationMS,
 			Popularity: track.Popularity,
 
 			AlbumSpotifyID: track.Album.ID,
@@ -425,8 +428,6 @@ type topTracksResults struct {
 	Tracks []struct {
 		ID         string
 		Name       string
-		PreviewURL string
-		DurationMS int64
 		Popularity int64
 
 		Album struct {
@@ -584,6 +585,9 @@ retry:
 	}
 	req.Header.Set("Authorization", token)
 
+	spo.reqsThisBatch++
+	spo.reqsThisRun++
+	spo.reqsThisSession++
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request error: %w", err)
@@ -601,6 +605,9 @@ retry:
 			waitTime := time.Duration(seconds)*time.Second + time.Second
 			log.Printf("429; retrying in %s", waitTime)
 			spo.nextReqAt = time.Now().Add(waitTime)
+			if waitTime > time.Minute {
+				spo.reqsThisSession = 0
+			}
 		}
 		if err := os.WriteFile(nextReqFilename, []byte(spo.nextReqAt.Format(time.UnixDate)), 0666); err != nil {
 			return nil, err

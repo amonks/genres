@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+
+go build -tags "fts5 sqlite_math_functions" .
+

@@ -10,7 +10,6 @@ pragma journal_mode='wal';
 create table if not exists genres (
         name        text primary key,
         key         string,
-        preview_url text,
         example     string,
 
         energy            integer,
@@ -99,8 +98,6 @@ create table if not exists artist_genres (
 create table if not exists tracks (
         spotify_id   text primary_key,
         name         text,
-        preview_url  text,
-        duration_ms  integer,
         popularity   integer,
 
         album_spotify_id text,
@@ -109,6 +106,8 @@ create table if not exists tracks (
         track_number     integer,
 
         has_analysis     boolean not null default false,
+        failed_analysis  boolean not null default false,
+        has_search       boolean not null default false,
 
         key              integer,
         mode             integer,
@@ -126,6 +125,21 @@ create table if not exists tracks (
 );
 
 create index if not exists tracks_by_has_analysis on tracks ( has_analysis );
+create index if not exists tracks_by_has_search   on tracks ( has_search   );
+
+create index if not exists tracks_by_key               on tracks ( key              );
+create index if not exists tracks_by_mode              on tracks ( mode             );
+create index if not exists tracks_by_tempo             on tracks ( tempo            );
+create index if not exists tracks_by_time_signature    on tracks ( time_signature   );
+
+create index if not exists tracks_by_acousticness      on tracks ( acousticness     );
+create index if not exists tracks_by_danceability      on tracks ( danceability     );
+create index if not exists tracks_by_energy            on tracks ( energy           );
+create index if not exists tracks_by_instrumentalness  on tracks ( instrumentalness );
+create index if not exists tracks_by_liveness          on tracks ( liveness         );
+create index if not exists tracks_by_loudness          on tracks ( loudness         );
+create index if not exists tracks_by_speechiness       on tracks ( speechiness      );
+create index if not exists tracks_by_valence           on tracks ( valence          );
 
 create table if not exists track_artists (
         track_spotify_id  text references tracks(spotify_id),
@@ -134,6 +148,9 @@ create table if not exists track_artists (
         primary key (track_spotify_id, artist_spotify_id)
 );
 
+create index if not exists track_artists_by_track  on track_artists (track_spotify_id);
+create index if not exists track_artists_by_artist on track_artists (artist_spotify_id);
+
 create table if not exists album_artists (
         artist_spotify_id text references artists(spotify_id),
         album_spotify_id  text references albums(spotify_id),
@@ -141,9 +158,20 @@ create table if not exists album_artists (
         primary key (artist_spotify_id, album_spotify_id)
 );
 
+create index if not exists album_artists_by_album  on album_artists (album_spotify_id);
+create index if not exists album_artists_by_artist on album_artists (artist_spotify_id);
+
 create table if not exists album_tracks (
         album_spotify_id text references albums(spotify_id),
         track_spotify_id text references tracks(spotify_id),
 
         primary key (album_spotify_id, track_spotify_id)
+);
+
+create index if not exists album_tracks_by_album  on album_tracks (album_spotify_id);
+create index if not exists album_tracks_by_track  on album_tracks (track_spotify_id);
+
+create virtual table if not exists tracks_search using fts5(
+        track_spotify_id,
+        content,
 );

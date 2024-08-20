@@ -52,9 +52,6 @@ func (el genreElement) Genre() (Genre, error) {
 	if genre.Key, err = el.Key(); err != nil {
 		return genre, err
 	}
-	if genre.PreviewURL, err = el.PreviewURL(); err != nil {
-		return genre, err
-	}
 	if genre.Color, genre.Top, genre.Left, genre.FontSize, err = el.Data(); err != nil {
 		return genre, err
 	}
@@ -77,14 +74,6 @@ func (el genreElement) Key() (string, error) {
 	}
 	match := keyRE.FindStringSubmatch(onclick)
 	return match[1], nil
-}
-
-func (el genreElement) PreviewURL() (string, error) {
-	previewURL, found := el.Attr("preview_url")
-	if !found {
-		return "", fmt.Errorf("genre '%s' has no preview_url attribute", el.Name())
-	}
-	return previewURL, nil
 }
 
 var styleRE = regexp.MustCompile(`^color: #(\w{6}); top: (\d+)px; left: (\d+)px; font-size: (\d+)%$`)

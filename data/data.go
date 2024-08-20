@@ -10,9 +10,6 @@ type Genre struct {
 	// like "3nzVSyaYk0KNrahyNQS0Ur"
 	Key string
 
-	// like "https://p.scdn.co/mp3-preview/8d9a195ffd681f1e359219b39474b98d820c53c5"
-	PreviewURL string
-
 	// Like `Budapest Chorus "Let the Light Shine on Me"`
 	//
 	// We can't safely parse this into artist/track, because quote marks
@@ -71,7 +68,7 @@ type AlbumArtist struct {
 
 type AlbumTrack struct {
 	TrackSpotifyID string
-	AlbumSpotifyID  string
+	AlbumSpotifyID string
 }
 
 // artists_rtree stores the bounds of each artist within 5-dimensional genre
@@ -105,8 +102,6 @@ type ArtistGenre struct {
 type Track struct {
 	SpotifyID  string
 	Name       string
-	PreviewURL string
-	DurationMS int64
 	Popularity int64
 
 	AlbumSpotifyID string
@@ -133,7 +128,27 @@ type Track struct {
 	Valence          float64
 }
 
+func (t *Track) Vector() Vector {
+	if !t.HasAnalysis {
+		return Vector{}
+	}
+	return Vector{
+		"acousticness":     t.Acousticness,
+		"danceability":     t.Danceability,
+		"energy":           t.Energy,
+		"instrumentalness": t.Instrumentalness,
+		"liveness":         t.Liveness,
+		"speechiness":      t.Speechiness,
+		"valence":          t.Valence,
+	}
+}
+
 type TrackArtist struct {
 	TrackSpotifyID  string
 	ArtistSpotifyID string
+}
+
+type TracksSearch struct {
+	TrackSpotifyID string
+	Content        string
 }
