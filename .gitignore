@@ -2,6 +2,6 @@ genres.db
 .envrc
 next-req
 TODO
-genres
+/genres
 log.tsv
 counts.log
