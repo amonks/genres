@@ -37,13 +37,15 @@ func runReporter(ctx context.Context, c chan<- struct{}, db *db.DB) error {
 				"%d\t%d\t"+
 				"%d\t%d\t"+
 				"%d\t%d\t"+
-				"%d\n",
+				"%d\t"+
+				"%d\t%d\n",
 
 			time.Now().Format(time.DateTime),
 			todo.TracksKnown, todo.TracksDone,
 			todo.ArtistsKnown, todo.ArtistsDone,
 			todo.AlbumsKnown, todo.AlbumsDone,
 			todo.TracksIndexed,
+			todo.ArtistAlbumsDone, todo.ArtistTracksDone,
 		)
 		c <- struct{}{}
 
@@ -65,6 +67,7 @@ type TODO struct {
 	TracksToFetchAnalysis int
 
 	ArtistsKnown, ArtistsDone              int
+	ArtistAlbumsDone, ArtistTracksDone     int
 	AlbumsKnown, AlbumsDone                int
 	TracksKnown, TracksDone, TracksIndexed int
 }
@@ -100,6 +103,16 @@ func gatherInfo(db *db.DB) (TODO, error) {
 		return todo, err
 	} else {
 		todo.ArtistsKnown = count
+	}
+	if count, err := db.CountArtistAlbumsDone(); err != nil {
+		return todo, err
+	} else {
+		todo.ArtistAlbumsDone = count
+	}
+	if count, err := db.CountArtistTracksDone(); err != nil {
+		return todo, err
+	} else {
+		todo.ArtistTracksDone = count
 	}
 	if count, err := db.CountArtistsDone(); err != nil {
 		return todo, err

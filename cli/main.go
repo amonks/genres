@@ -26,7 +26,7 @@ func main() {
 
 var usage = strings.TrimSpace(`
 usage: genres $cmd
-valid $cmd are 'fetch', 'search', 'find', 'path'
+valid $cmd are 'fetch', 'search', 'find', 'path', 'neighbors'
 for help: genres $cmd -help
 `)
 
@@ -62,9 +62,10 @@ func run() error {
 	case "path":
 		return path(ctx, db, args)
 
+	case "neighbors":
+		return neighbors(ctx, db, args)
+
 	default:
 		return fmt.Errorf("unknown cmd: '%s'\n%s", cmd, usage)
 	}
-
-	return nil
 }

@@ -139,6 +139,30 @@ func (db *DB) CountArtistsKnown() (int, error) {
 	return int(count), nil
 }
 
+func (db *DB) CountArtistAlbumsDone() (int, error) {
+	var count int64
+	if err := db.
+		Table("artists").
+		Where("has_fetched_albums = true").
+		Count(&count).
+		Error; err != nil {
+		return 0, err
+	}
+	return int(count), nil
+}
+
+func (db *DB) CountArtistTracksDone() (int, error) {
+	var count int64
+	if err := db.
+		Table("artists").
+		Where("has_fetched_tracks = true").
+		Count(&count).
+		Error; err != nil {
+		return 0, err
+	}
+	return int(count), nil
+}
+
 func (db *DB) CountArtistsDone() (int, error) {
 	var count int64
 	if err := db.

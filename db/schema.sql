@@ -131,6 +131,7 @@ create index if not exists tracks_by_key               on tracks ( key          
 create index if not exists tracks_by_mode              on tracks ( mode             );
 create index if not exists tracks_by_tempo             on tracks ( tempo            );
 create index if not exists tracks_by_time_signature    on tracks ( time_signature   );
+create index if not exists tracks_by_popularity        on tracks ( popularity       );
 
 create index if not exists tracks_by_acousticness      on tracks ( acousticness     );
 create index if not exists tracks_by_danceability      on tracks ( danceability     );

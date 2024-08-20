@@ -7,46 +7,38 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/amonks/genres/data"
 	"github.com/amonks/genres/db"
 	"github.com/amonks/genres/subcmd"
 )
 
-func path(ctx context.Context, db *db.DB, args []string) error {
-	fs := subcmd.New("path", "create a playlist along a linear path between two tracks")
+func neighbors(ctx context.Context, db *db.DB, args []string) error {
+	subcmd := subcmd.New("neighbors", "return tracks similar to the given track")
+	subcmd.SetArg("query", "string", "search query, matched against track, album, and artist names (required)")
 	var (
-		from  = fs.String("from", "", "query for 'from' track")
-		to    = fs.String("to", "", "query for 'to' track")
-		steps = fs.Int("steps", 5, "number of steps on the path")
+		count = subcmd.Int("count", 5, "number of tracks to return")
 	)
-	if err := fs.Parse(args); err != nil {
+	if err := subcmd.Parse(args); err != nil {
 		return fmt.Errorf("flag parsing err: %w", err)
 	}
 
-	fromTrack, err := db.Resolve(ctx, *from)
+	query := strings.Join(subcmd.Args(), " ")
+
+	results, err := db.Search(ctx, query, 1)
 	if err != nil {
-		return fmt.Errorf("error getting 'from' track '%s': %w", *from, err)
+		return fmt.Errorf("error in search for '%s': %w", query, err)
 	}
 
-	toTrack, err := db.Resolve(ctx, *to)
+	track := results[0]
+	target := track.Vector()
+
+	tracks, err := db.NearestTracks(ctx, *count+1, target)
 	if err != nil {
-		return fmt.Errorf("error getting 'to' track '%s': %w", *to, err)
+		return fmt.Errorf("error finding neighbors of '%s': %w", track.SpotifyID, err)
 	}
 
-	fromVec, toVec := fromTrack.Vector(), toTrack.Vector()
-	delta := fromVec.Delta(toVec)
-	path := fromVec.Path(delta, *steps)
-	tracks := make([]data.Track, *steps+1)
-	distances := make([]float64, *steps+1)
-
-	tracks[0], distances[0] = *fromTrack, 0
-	for i, vec := range path {
-		results, err := db.NearestTracks(ctx, 1, vec)
-		if err != nil {
-			return fmt.Errorf("error getting nearest track for step %d: %w", i+1, err)
-		}
-		tracks[i+1] = results[0]
-		distances[i+1] = vec.Distance(results[0].Vector())
+	distances := make([]float64, len(tracks))
+	for i, track := range tracks {
+		distances[i] = target.Distance(track.Vector())
 	}
 
 	rows := make([][]string, len(tracks)+1)

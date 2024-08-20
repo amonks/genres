@@ -41,7 +41,7 @@ func New(clientID, clientSecret string) *Client {
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		nextReqAtPtr: atomic.Pointer[time.Time]{},
-		delay:        time.Second / 2,
+		delay:        time.Second / 10,
 	}
 	client.setNextReqAt(nextReqAt)
 	return client
