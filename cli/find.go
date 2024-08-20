@@ -3,26 +3,26 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 
 	"github.com/amonks/genres/db"
+	"github.com/amonks/genres/subcmd"
 )
 
 func find(ctx context.Context, db *db.DB, args []string) error {
-	fs := flag.NewFlagSet("find", flag.ContinueOnError)
+	subcmd := subcmd.New("find", "find tracks matching a feature vector")
 	var (
-		count = fs.Int("count", 1, "number of tracks to return")
+		count = subcmd.Int("count", 1, "number of tracks to return")
 
-		acousticness     = fs.Float64("acousticness", -1, "acousticness")
-		danceability     = fs.Float64("danceability", -1, "danceability")
-		energy           = fs.Float64("energy", -1, "energy")
-		instrumentalness = fs.Float64("instrumentalness", -1, "instrumentalness")
-		liveness         = fs.Float64("liveness", -1, "liveness")
-		speechiness      = fs.Float64("speechiness", -1, "speechiness")
-		valence          = fs.Float64("valence", -1, "valence")
+		acousticness     = subcmd.Float64("acousticness", -1, "acousticness")
+		danceability     = subcmd.Float64("danceability", -1, "danceability")
+		energy           = subcmd.Float64("energy", -1, "energy")
+		instrumentalness = subcmd.Float64("instrumentalness", -1, "instrumentalness")
+		liveness         = subcmd.Float64("liveness", -1, "liveness")
+		speechiness      = subcmd.Float64("speechiness", -1, "speechiness")
+		valence          = subcmd.Float64("valence", -1, "valence")
 	)
-	if err := fs.Parse(args); err != nil {
+	if err := subcmd.Parse(args); err != nil {
 		return fmt.Errorf("flag parsing err: %w", err)
 	}
 

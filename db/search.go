@@ -88,6 +88,8 @@ func (db *DB) IndexTracks(ctx context.Context, tracks []data.Track) error {
 		ids[i] = track.SpotifyID
 	}
 
+	defer db.hold()()
+
 	return db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.
 			Table("tracks_search").

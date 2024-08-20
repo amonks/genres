@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -10,10 +9,11 @@ import (
 
 	"github.com/amonks/genres/data"
 	"github.com/amonks/genres/db"
+	"github.com/amonks/genres/subcmd"
 )
 
 func path(ctx context.Context, db *db.DB, args []string) error {
-	fs := flag.NewFlagSet("search", flag.ContinueOnError)
+	fs := subcmd.New("path", "create a playlist along a linear path between two tracks")
 	var (
 		from  = fs.String("from", "", "query for 'from' track")
 		to    = fs.String("to", "", "query for 'to' track")

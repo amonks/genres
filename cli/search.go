@@ -3,25 +3,28 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"strings"
 
 	"github.com/amonks/genres/db"
+	"github.com/amonks/genres/subcmd"
 )
 
 func search(ctx context.Context, db *db.DB, args []string) error {
-	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	var (
-		count = fs.Int("count", 1, "number of tracks to return")
+		count int
 	)
-	if err := fs.Parse(args); err != nil {
+
+	subcmd := subcmd.New("search", "search the database for a track")
+	subcmd.SetArg("query", "string", "search query, matched against track, album, and artist names (required)")
+	subcmd.IntVar(&count, "count", 1, "number of tracks to return")
+	if err := subcmd.Parse(args); err != nil {
 		return fmt.Errorf("flag parsing err: %w", err)
 	}
 
-	query := strings.Join(fs.Args(), " ")
+	query := strings.Join(subcmd.Args(), " ")
 
-	tracks, err := db.Search(ctx, query, *count)
+	tracks, err := db.Search(ctx, query, count)
 	if err != nil {
 		return fmt.Errorf("error in search for '%s': %w", query, err)
 	}
@@ -32,7 +35,7 @@ func search(ctx context.Context, db *db.DB, args []string) error {
 	}
 
 	var out interface{} = tracks
-	if *count == 1 {
+	if count == 1 {
 		out = tracks[0]
 	}
 

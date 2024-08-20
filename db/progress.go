@@ -197,3 +197,15 @@ func (db *DB) CountTracksDone() (int, error) {
 	}
 	return int(count), nil
 }
+
+func (db *DB) CountTracksIndexed() (int, error) {
+	var count int64
+	if err := db.
+		Table("tracks").
+		Where("has_search = true").
+		Count(&count).
+		Error; err != nil {
+		return 0, err
+	}
+	return int(count), nil
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"gorm.io/driver/sqlite"
@@ -15,6 +16,12 @@ import (
 // DB represents our sqlite3 database file.
 type DB struct {
 	*gorm.DB
+	wmu sync.Mutex
+}
+
+func (db *DB) hold() func() {
+	db.wmu.Lock()
+	return func() { db.wmu.Unlock() }
 }
 
 //go:embed schema.sql
@@ -40,7 +47,9 @@ func Open() (*DB, error) {
 		return nil, fmt.Errorf("error opening db file at '%s': %w", filename, err)
 	}
 
-	db := &DB{gdb}
+	db := &DB{
+		DB: gdb,
+	}
 
 	if err := db.Exec(schema).Error; err != nil {
 		return nil, fmt.Errorf("error migrating db at '%s': %w", filename, err)
@@ -50,6 +59,7 @@ func Open() (*DB, error) {
 }
 
 func (db *DB) Close() error {
+	defer db.hold()()
 	instance, err := db.DB.DB()
 	if err != nil {
 		fmt.Println("error getting db to close:", err)

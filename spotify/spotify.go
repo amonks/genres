@@ -13,6 +13,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/amonks/genres/data"
@@ -34,31 +36,28 @@ func New(clientID, clientSecret string) *Client {
 			panic(err)
 		}
 	}
-	return &Client{
+
+	client := &Client{
 		clientID:     clientID,
 		clientSecret: clientSecret,
-		nextReqAt:    nextReqAt,
+		nextReqAtPtr: atomic.Pointer[time.Time]{},
 		delay:        time.Second / 2,
 	}
+	client.setNextReqAt(nextReqAt)
+	return client
 }
 
 type Client struct {
+	mu sync.Mutex
+
 	clientID     string
 	clientSecret string
 
-	nextReqAt time.Time
-	delay     time.Duration
+	nextReqAtPtr atomic.Pointer[time.Time]
+	delay        time.Duration
 
 	accessToken string
 	expiresAt   time.Time
-
-	reqsThisBatch, reqsThisSession, reqsThisRun int
-}
-
-func (spo *Client) RequestCount() (int, int, int) {
-	a, b, c := spo.reqsThisBatch, spo.reqsThisSession, spo.reqsThisRun
-	spo.reqsThisBatch = 0
-	return a, b, c
 }
 
 func (spo *Client) FetchAlbumsTracks(ctx context.Context, albumSpotifyIDs []string) ([]data.Track, error) {
@@ -553,18 +552,30 @@ type genreSearchResultsPage struct {
 	}
 }
 
+func (spo *Client) nextReqAt() time.Time {
+	return *spo.nextReqAtPtr.Load()
+}
+
+func (spo *Client) setNextReqAt(to time.Time) {
+	spo.nextReqAtPtr.Store(&to)
+}
+
 func (spo *Client) get(ctx context.Context, baseURL string, query url.Values) (io.ReadCloser, error) {
+	spo.mu.Lock()
+	defer spo.mu.Unlock()
+
 retry:
-	if !spo.nextReqAt.IsZero() {
+	nextReqAt := spo.nextReqAt()
+	if !nextReqAt.IsZero() {
 		now := time.Now()
-		if spo.nextReqAt.Sub(now) > time.Second {
-			log.Printf("next request in %s at %s", spo.nextReqAt.Sub(now).Truncate(time.Second), spo.nextReqAt.Format(time.Kitchen))
+		if nextReqAt.Sub(now) > time.Second {
+			log.Printf("next request in %s at %s", nextReqAt.Sub(now).Truncate(time.Second), nextReqAt.Format(time.StampMilli))
 		}
 	wait:
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(time.Until(spo.nextReqAt)):
+		case <-time.After(time.Until(nextReqAt)):
 			break wait
 		}
 		if err := os.Remove(nextReqFilename); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -585,18 +596,16 @@ retry:
 	}
 	req.Header.Set("Authorization", token)
 
-	spo.reqsThisBatch++
-	spo.reqsThisRun++
-	spo.reqsThisSession++
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request error: %w", err)
 	}
 	if resp.StatusCode == 429 {
 		spo.delay = 2 * spo.delay
+		var nextReqAt time.Time
 		if retryAfter := resp.Header.Get("Retry-After"); retryAfter == "" {
 			log.Printf("no retry-after header on 429; retrying in 1 minute")
-			spo.nextReqAt = time.Now().Add(time.Minute)
+			nextReqAt = time.Now().Add(time.Minute)
 		} else {
 			seconds, err := strconv.ParseInt(retryAfter, 10, 64)
 			if err != nil {
@@ -604,12 +613,10 @@ retry:
 			}
 			waitTime := time.Duration(seconds)*time.Second + time.Second
 			log.Printf("429; retrying in %s", waitTime)
-			spo.nextReqAt = time.Now().Add(waitTime)
-			if waitTime > time.Minute {
-				spo.reqsThisSession = 0
-			}
+			nextReqAt = time.Now().Add(waitTime)
 		}
-		if err := os.WriteFile(nextReqFilename, []byte(spo.nextReqAt.Format(time.UnixDate)), 0666); err != nil {
+		spo.setNextReqAt(nextReqAt)
+		if err := os.WriteFile(nextReqFilename, []byte(nextReqAt.Format(time.UnixDate)), 0666); err != nil {
 			return nil, err
 		}
 		goto retry
@@ -618,7 +625,7 @@ retry:
 		return nil, fmt.Errorf("fetch error: %w", err)
 	}
 
-	spo.nextReqAt = time.Now().Add(spo.delay)
+	spo.setNextReqAt(time.Now().Add(spo.delay))
 
 	return resp.Body, nil
 }

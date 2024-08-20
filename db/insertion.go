@@ -11,6 +11,8 @@ import (
 
 // InsertGenre, given a Genre, inserts it into the genres table.
 func (db *DB) InsertGenre(genre *data.Genre) error {
+	defer db.hold()()
+
 	if genre.Name == "" {
 		return fmt.Errorf("no genre name")
 	}
@@ -24,6 +26,8 @@ func (db *DB) InsertGenre(genre *data.Genre) error {
 }
 
 func (db *DB) MarkAlbumTracksFetched(albumSpotifyID string) error {
+	defer db.hold()()
+
 	if albumSpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
@@ -38,6 +42,8 @@ func (db *DB) MarkAlbumTracksFetched(albumSpotifyID string) error {
 }
 
 func (db *DB) MarkArtistAlbumsFetched(artistSpotifyID string) error {
+	defer db.hold()()
+
 	if artistSpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
@@ -52,6 +58,8 @@ func (db *DB) MarkArtistAlbumsFetched(artistSpotifyID string) error {
 }
 
 func (db *DB) MarkGenreFetched(genreName string) error {
+	defer db.hold()()
+
 	if genreName == "" {
 		return fmt.Errorf("no spotify id")
 	}
@@ -66,6 +74,8 @@ func (db *DB) MarkGenreFetched(genreName string) error {
 }
 
 func (db *DB) MarkArtistFetched(artistSpotifyID string) error {
+	defer db.hold()()
+
 	if artistSpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
@@ -80,6 +90,8 @@ func (db *DB) MarkArtistFetched(artistSpotifyID string) error {
 }
 
 func (db *DB) MarkTrackAnalysisFailed(tracks []string) error {
+	defer db.hold()()
+
 	if err := db.Table("tracks").
 		Where("spotify_id in ?", tracks).
 		Updates(map[string]interface{}{
@@ -91,6 +103,8 @@ func (db *DB) MarkTrackAnalysisFailed(tracks []string) error {
 }
 
 func (db *DB) AddTrackAnalysis(track *data.Track) error {
+	defer db.hold()()
+
 	if track.SpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
@@ -121,6 +135,8 @@ func (db *DB) AddTrackAnalysis(track *data.Track) error {
 }
 
 func (db *DB) InsertAlbum(ctx context.Context, album *data.Album) error {
+	defer db.hold()()
+
 	if album.SpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
@@ -165,6 +181,8 @@ func (db *DB) InsertAlbum(ctx context.Context, album *data.Album) error {
 }
 
 func (db *DB) InsertTrack(ctx context.Context, track *data.Track) error {
+	defer db.hold()()
+
 	if track.SpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
@@ -244,6 +262,8 @@ func (db *DB) InsertTrack(ctx context.Context, track *data.Track) error {
 // InsertArtist, given an Artist, inserts the appropriate data into the artists,
 // artist_genres, and artists_rtree tables, doing nothing if they already exist.
 func (db *DB) InsertArtist(ctx context.Context, artist *data.Artist) error {
+	defer db.hold()()
+
 	if artist.SpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}

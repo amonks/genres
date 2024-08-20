@@ -13,9 +13,9 @@ import (
 	"strings"
 
 	"github.com/amonks/genres/db"
-	"github.com/amonks/genres/fetcher"
 	"github.com/amonks/genres/sigctx"
 	"github.com/amonks/genres/spotify"
+	"github.com/amonks/genres/workers"
 )
 
 func main() {
@@ -26,7 +26,7 @@ func main() {
 
 var usage = strings.TrimSpace(`
 usage: genres $cmd
-valid $cmd are 'fetch', 'search', 'find', 'path', 'index'
+valid $cmd are 'fetch', 'search', 'find', 'path'
 for help: genres $cmd -help
 `)
 
@@ -46,14 +46,12 @@ func run() error {
 
 	switch cmd {
 	case "fetch":
-		spo := spotify.New(os.Getenv("SPOTIFY_CLIENT_ID"), os.Getenv("SPOTIFY_CLIENT_SECRET"))
-		f := fetcher.New(db, spo)
-		if err := f.Run(ctx); err != nil {
-			return fmt.Errorf("fetch error: %w", err)
+		clientID, clientSecret := os.Getenv("SPOTIFY_CLIENT_ID"), os.Getenv("SPOTIFY_CLIENT_SECRET")
+		if clientID == "" || clientSecret == "" {
+			return fmt.Errorf("must set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET")
 		}
-
-	case "index":
-		return index(ctx, db)
+		spo := spotify.New(clientID, clientSecret)
+		return workers.Run(ctx, db, spo)
 
 	case "search":
 		return search(ctx, db, args)
