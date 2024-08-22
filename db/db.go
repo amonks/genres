@@ -31,9 +31,7 @@ var schema string
 
 // Open returns a connection to a migrated sqlite3 database file on disk,
 // creating the file and running migrations if necessary.
-func Open() (*DB, error) {
-	const filename = "genres.db"
-
+func Open(filename string) (*DB, error) {
 	rodb, err := openDB(filename, false)
 	if err != nil {
 		return nil, err
@@ -61,7 +59,7 @@ func openDB(filename string, rw bool) (*gorm.DB, error) {
 	if rw {
 		options = "mode=rw&_query_only=false&_txlock=immediate"
 	}
-	db, err := gorm.Open(sqlite.Open(fmt.Sprintf("%s?_journal_mode=wal&_foreign_keys=true&%s", filename, options)), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open(fmt.Sprintf("%s?_journal_mode=wal&_foreign_keys=true&_synchronous=1&%s", filename, options)), &gorm.Config{
 		Logger: logger.New(
 			log.New(os.Stderr, "\n", log.LstdFlags),
 			logger.Config{

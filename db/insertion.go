@@ -136,6 +136,87 @@ func (db *DB) AddTrackAnalysis(track *data.Track) error {
 	return nil
 }
 
+func (db *DB) PopulateAlbum(ctx context.Context, album *data.Album) error {
+	defer db.hold()()
+
+	if album.SpotifyID == "" {
+		return fmt.Errorf("no spotify id")
+	}
+	return db.rw.Transaction(func(db *gorm.DB) error {
+		if err := db.
+			Where("spotify_id = ?", album.SpotifyID).
+			Updates(map[string]any{
+				"name":                   album.Name,
+				"type":                   album.Type,
+				"image_url":              album.ImageURL,
+				"total_tracks":           album.TotalTracks,
+				"release_date":           album.ReleaseDate,
+				"release_date_precision": album.ReleaseDatePrecision,
+			}).Error; err != nil {
+			return fmt.Errorf("error inserting album '%s': %w", album.Name, err)
+		}
+
+		for _, artist := range album.Artists {
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("canceled: %w", err)
+			}
+
+			if artist.SpotifyID == "" {
+				return fmt.Errorf("no spotify id")
+			}
+			if err := db.
+				Clauses(clause.OnConflict{DoNothing: true}).
+				Create(artist).
+				Error; err != nil {
+				return fmt.Errorf("error inserting artist '%s': %w", artist.Name, err)
+			}
+
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("canceled: %w", err)
+			}
+
+			if err := db.
+				Clauses(clause.OnConflict{DoNothing: true}).
+				Create(&data.AlbumArtist{
+					AlbumSpotifyID:  album.SpotifyID,
+					ArtistSpotifyID: artist.SpotifyID,
+				}).
+				Error; err != nil {
+				return fmt.Errorf("error inserting album artist {'%s' '%s'}: %w", album.Name, artist.Name, err)
+			}
+
+		}
+
+		for _, track := range album.Tracks {
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("canceled: %w", err)
+			}
+
+			if err := db.
+				Table("tracks").
+				Clauses(clause.OnConflict{DoNothing: true}).
+				Create(track).
+				Error; err != nil {
+				return fmt.Errorf("error inserting album track {'%s' '%s'}: %w", album.Name, track.Name, err)
+			}
+
+			if err := db.
+				Table("album_tracks").
+				Clauses(clause.OnConflict{DoNothing: true}).
+				Create(&data.AlbumTrack{
+					AlbumSpotifyID: album.SpotifyID,
+					TrackSpotifyID: track.SpotifyID,
+				}).
+				Error; err != nil {
+				return fmt.Errorf("error inserting album track {'%s' '%s'}: %w", album.Name, track.Name, err)
+			}
+
+		}
+
+		return nil
+	})
+}
+
 func (db *DB) InsertAlbum(ctx context.Context, album *data.Album) error {
 	defer db.hold()()
 
@@ -144,7 +225,7 @@ func (db *DB) InsertAlbum(ctx context.Context, album *data.Album) error {
 	}
 	return db.rw.Transaction(func(db *gorm.DB) error {
 		if err := db.
-			Clauses(clause.OnConflict{DoNothing: true}).
+			Clauses(clause.OnConflict{UpdateAll: true}).
 			Create(album).
 			Error; err != nil {
 			return fmt.Errorf("error inserting album '%s': %w", album.Name, err)
@@ -191,6 +272,7 @@ func (db *DB) InsertTrack(ctx context.Context, track *data.Track) error {
 
 	return db.rw.Transaction(func(db *gorm.DB) error {
 		if err := db.
+			Table("tracks").
 			Clauses(clause.OnConflict{DoNothing: true}).
 			Create(track).
 			Error; err != nil {
@@ -200,28 +282,30 @@ func (db *DB) InsertTrack(ctx context.Context, track *data.Track) error {
 			return fmt.Errorf("canceled: %w", err)
 		}
 
-		if err := db.
-			Clauses(clause.OnConflict{DoNothing: true}).
-			Create(data.Album{
-				SpotifyID: track.AlbumSpotifyID,
-				Name:      track.AlbumName,
-			}).
-			Error; err != nil {
-			return fmt.Errorf("error inserting album '%s': %w", track.AlbumName, err)
-		}
-		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("canceled: %w", err)
-		}
-
 		if track.AlbumSpotifyID != "" {
 			if err := db.
+				Table("albums").
+				Clauses(clause.OnConflict{DoNothing: true}).
+				Create(&data.Album{
+					SpotifyID: track.AlbumSpotifyID,
+					Name:      track.AlbumName,
+				}).
+				Error; err != nil {
+				return fmt.Errorf("error inserting album '%s': %w", track.AlbumName, err)
+			}
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("canceled: %w", err)
+			}
+
+			if err := db.
+				Table("album_tracks").
 				Clauses(clause.OnConflict{DoNothing: true}).
 				Create(&data.AlbumTrack{
 					TrackSpotifyID: track.SpotifyID,
 					AlbumSpotifyID: track.AlbumSpotifyID,
 				}).
 				Error; err != nil {
-				return fmt.Errorf("error inserting track album {'%s', '%s'}: %w", track.Name, track.AlbumName, err)
+				return fmt.Errorf("error inserting album track {'%s', '%s'}: %w", track.AlbumSpotifyID, track.SpotifyID, err)
 			}
 			if err := ctx.Err(); err != nil {
 				return fmt.Errorf("canceled: %w", err)

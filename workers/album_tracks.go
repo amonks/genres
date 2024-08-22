@@ -22,17 +22,32 @@ func runAlbumTracksFetcher(ctx context.Context, c chan<- struct{}, db *db.DB, sp
 			return nil
 		}
 
-		tracks, err := spo.FetchAlbumsTracks(ctx, albums)
+		fetched, err := spo.FetchAlbums(ctx, albums)
 		if err != nil {
 			return err
 		}
-		for _, track := range tracks {
-			if err := db.InsertTrack(ctx, &track); err != nil {
+		for _, album := range fetched {
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("canceled: %w", err)
+			}
+
+			if err := db.PopulateAlbum(ctx, &album); err != nil {
 				return err
 			}
-		}
-		for _, album := range albums {
-			if err := db.MarkAlbumTracksFetched(album); err != nil {
+			for _, track := range album.Tracks {
+				if err := ctx.Err(); err != nil {
+					return fmt.Errorf("canceled: %w", err)
+				}
+
+				if err := db.InsertTrack(ctx, &track); err != nil {
+					return err
+				}
+			}
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("canceled: %w", err)
+			}
+
+			if err := db.MarkAlbumTracksFetched(album.SpotifyID); err != nil {
 				return err
 			}
 		}

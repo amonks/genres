@@ -36,21 +36,10 @@ func path(ctx context.Context, db *db.DB, args []string) error {
 	fromVec, toVec := fromTrack.Vector(), toTrack.Vector()
 	delta := fromVec.Delta(toVec)
 	path := fromVec.Path(delta, *steps)
-	tracks := make([]data.Track, *steps+1)
-	distances := make([]float64, *steps+1)
 
-	tracks[0], distances[0] = *fromTrack, 0
-	for i, vec := range path {
-		results, err := db.NearestTracks(ctx, 1, vec)
-		if err != nil {
-			return fmt.Errorf("error getting nearest track for step %d: %w", i+1, err)
-		}
-		tracks[i+1] = results[0]
-		distances[i+1] = vec.Distance(results[0].Vector())
-	}
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
-	rows := make([][]string, len(tracks)+1)
-	rows[0] = []string{
+	header := []string{
 		"artists",
 		"album", "track", "spotify_id",
 		"acousticness",
@@ -62,12 +51,14 @@ func path(ctx context.Context, db *db.DB, args []string) error {
 		"valence",
 		"distance",
 	}
-	for i, track := range tracks {
+	fmt.Fprintf(tw, strings.Join(header, "\t")+"\n")
+
+	printTrack := func(track *data.Track, distance float64) {
 		artists := make([]string, len(track.Artists))
 		for i, artist := range track.Artists {
 			artists[i] = artist.Name
 		}
-		rows[i+1] = []string{
+		fmt.Fprintf(tw, strings.Join([]string{
 			strings.Join(artists, ", "),
 			track.AlbumName, track.Name, track.SpotifyID,
 			fmt.Sprintf("%f", track.Acousticness),
@@ -77,14 +68,20 @@ func path(ctx context.Context, db *db.DB, args []string) error {
 			fmt.Sprintf("%f", track.Liveness),
 			fmt.Sprintf("%f", track.Speechiness),
 			fmt.Sprintf("%f", track.Valence),
-			fmt.Sprintf("%f", distances[i]),
-		}
+			fmt.Sprintf("%f", distance),
+		}, "\t")+"\n")
 	}
 
-	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	for _, row := range rows {
-		fmt.Fprintf(tw, strings.Join(row, "\t")+"\n")
+	printTrack(fromTrack, 0)
+
+	for i, vec := range path {
+		results, err := db.NearestTracks(ctx, 1, vec)
+		if err != nil {
+			return fmt.Errorf("error getting nearest track for step %d: %w", i+1, err)
+		}
+		printTrack(&results[0], vec.Distance(results[0].Vector()))
 	}
+
 	tw.Flush()
 
 	return nil

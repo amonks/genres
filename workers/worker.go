@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/amonks/genres/db"
 	"github.com/amonks/genres/spotify"
@@ -29,6 +30,8 @@ func (eng *engine) add(name string, f func(context.Context, chan<- struct{}) err
 }
 
 func (eng *engine) start(ctx context.Context) error {
+	ctx, cancel := context.WithCancelCause(ctx)
+
 	g := new(errgroup.Group)
 	events := make(chan string)
 
@@ -55,6 +58,7 @@ func (eng *engine) start(ctx context.Context) error {
 			err := f(ctx, theseEvents)
 			if err != nil {
 				log.Printf("error:\t%s\t%s", name, err)
+				cancel(err)
 			} else {
 				log.Printf("done:\t%s", name)
 			}
@@ -122,8 +126,8 @@ func Run(ctx context.Context, db *db.DB, spo *spotify.Client) error {
 	eng.add("artist_tracks", func(ctx context.Context, c chan<- struct{}) error { return runArtistTracksFetcher(ctx, c, db, spo) })
 	eng.add("genre_artists", func(ctx context.Context, c chan<- struct{}) error { return runGenreArtistsFetcher(ctx, c, db, spo) })
 	eng.add("genres", func(ctx context.Context, c chan<- struct{}) error { return runGenresFetcher(ctx, c, db) })
-	eng.add("indexer", func(ctx context.Context, c chan<- struct{}) error { return runIndexer(ctx, c, db, 100) })
-	eng.add("reporter", func(ctx context.Context, c chan<- struct{}) error { return runReporter(ctx, c, db) })
+	eng.add("indexer", func(ctx context.Context, c chan<- struct{}) error { return runIndexer(ctx, c, db, 10_000) })
+	eng.add("reporter", func(ctx context.Context, c chan<- struct{}) error { return runReporter(ctx, c, db, time.Minute*10) })
 	eng.add("track_analysis", func(ctx context.Context, c chan<- struct{}) error { return runTrackAnalysisFetcher(ctx, c, db, spo) })
 
 	return eng.start(ctx)

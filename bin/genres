@@ -1,9 +1,4 @@
 #!/usr/bin/env sh
 
-output=$(go build -race -o genres -tags "fts5 sqlite_math_functions" ./cli 2>&1)
-if test $? -ne 0 ; then
-	echo $output
-	exit 1
-fi
-./genres "$@"
+CGO_ENABLED=1 go run -tags "fts5 sqlite_math_functions" ./cli -dbfile="/data/tank/genres/genres.db" "$@"
 

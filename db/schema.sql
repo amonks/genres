@@ -96,7 +96,7 @@ create table if not exists artist_genres (
 );
 
 create table if not exists tracks (
-        spotify_id   text primary_key,
+        spotify_id   text primary key,
         name         text,
         popularity   integer,
 

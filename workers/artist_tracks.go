@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/amonks/genres/data"
 	"github.com/amonks/genres/db"
 	"github.com/amonks/genres/spotify"
 )
@@ -33,7 +34,18 @@ func runArtistTracksFetcher(ctx context.Context, c chan<- struct{}, db *db.DB, s
 			log.Printf("[artist_tracks] no tracks for artist '%s'", artist)
 		}
 		for _, track := range tracks {
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("canceled: %w", err)
+			}
+
 			if err := db.InsertTrack(ctx, &track); err != nil {
+				return err
+			}
+
+			if err := db.InsertAlbum(ctx, &data.Album{
+				SpotifyID: track.AlbumSpotifyID,
+				Name:      track.AlbumName,
+			}); err != nil {
 				return err
 			}
 		}

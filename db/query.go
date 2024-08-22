@@ -29,6 +29,7 @@ func (db *DB) NearestTracks(ctx context.Context, count int, input data.Vector) (
 		}
 		q := db.ro.
 			Table("tracks").
+			Where("has_analysis = true").
 			Order(fmt.Sprintf("sqrt(%s) asc", strings.Join(terms, " + "))).
 			Limit(count)
 		for k, v := range input {

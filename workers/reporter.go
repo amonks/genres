@@ -9,7 +9,7 @@ import (
 	"github.com/amonks/genres/db"
 )
 
-func runReporter(ctx context.Context, c chan<- struct{}, db *db.DB) error {
+func runReporter(ctx context.Context, c chan<- struct{}, db *db.DB, duration time.Duration) error {
 
 	logfile, err := os.OpenFile("log.tsv", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
@@ -24,7 +24,7 @@ func runReporter(ctx context.Context, c chan<- struct{}, db *db.DB) error {
 		return fmt.Errorf("reporting error: %w", err)
 	}
 
-	tick := time.NewTicker(time.Minute)
+	tick := time.NewTicker(duration)
 
 	for {
 		todo, todoErr = gatherInfo(db)

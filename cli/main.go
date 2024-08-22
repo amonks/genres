@@ -10,12 +10,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/amonks/genres/db"
 	"github.com/amonks/genres/sigctx"
-	"github.com/amonks/genres/spotify"
-	"github.com/amonks/genres/workers"
 )
 
 func main() {
@@ -24,48 +21,56 @@ func main() {
 	}
 }
 
-var usage = strings.TrimSpace(`
-usage: genres $cmd
-valid $cmd are 'fetch', 'search', 'find', 'path', 'neighbors'
-for help: genres $cmd -help
-`)
-
 func run() error {
 	ctx := sigctx.New()
 
-	db, err := db.Open()
+	flag.CommandLine.Init("genres", flag.ContinueOnError)
+	dbFilename := flag.String("dbfile", "genres.db", "path to database file")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "\nmanipulate data from spotify\n\n")
+		fmt.Fprintf(os.Stderr, "  genres [flags] $cmd <defined by cmd...>\n\n")
+		fmt.Fprintf(os.Stderr, "flags:\n")
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "  $cmd {fetch, search, find, path, neighbors, serve, progress}\n")
+		fmt.Fprintf(os.Stderr, "  \twhich command to run\n")
+		fmt.Fprintf(os.Stderr, "  \trun `flag $cmd -help for more details about specific commands.\n")
+	}
+	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil && !errors.Is(err, flag.ErrHelp) {
+		return fmt.Errorf("flag parse error: %w", err)
+	} else if err != nil {
+		return nil
+	}
+
+	db, err := db.Open(*dbFilename)
 	if err != nil {
-		return err
+		return fmt.Errorf("db open error: %w", err)
 	}
 	defer db.Close()
 
-	if len(os.Args) < 2 {
-		return fmt.Errorf(usage)
+	args := flag.Args()
+	if len(args) < 1 {
+		flag.CommandLine.Parse([]string{"-help"})
+		return nil
 	}
-	cmd, args := os.Args[1], os.Args[2:]
-
+	cmd, args := args[0], args[1:]
 	switch cmd {
+	case "serve":
+		return serve(ctx, db, args)
+	case "progress":
+		return progress(ctx, db, args)
 	case "fetch":
-		clientID, clientSecret := os.Getenv("SPOTIFY_CLIENT_ID"), os.Getenv("SPOTIFY_CLIENT_SECRET")
-		if clientID == "" || clientSecret == "" {
-			return fmt.Errorf("must set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET")
-		}
-		spo := spotify.New(clientID, clientSecret)
-		return workers.Run(ctx, db, spo)
-
+		return fetch(ctx, db, args)
 	case "search":
 		return search(ctx, db, args)
-
 	case "find":
 		return find(ctx, db, args)
-
 	case "path":
 		return path(ctx, db, args)
-
 	case "neighbors":
 		return neighbors(ctx, db, args)
-
+	case "migrate":
+		return nil
 	default:
-		return fmt.Errorf("unknown cmd: '%s'\n%s", cmd, usage)
+		return fmt.Errorf("unknown cmd: '%s'", cmd)
 	}
 }

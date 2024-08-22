@@ -2,6 +2,29 @@ package db
 
 import "fmt"
 
+func (db *DB) CountGenresKnown() (int, error) {
+	var count int64
+	if err := db.ro.
+		Table("genres").
+		Count(&count).
+		Error; err != nil {
+		return 0, fmt.Errorf("error counting genres: %w", err)
+	}
+	return int(count), nil
+}
+
+func (db *DB) CountGenresWithFetchedArtists() (int, error) {
+	var count int64
+	if err := db.ro.
+		Table("genres").
+		Where("has_fetched_artists = true").
+		Count(&count).
+		Error; err != nil {
+		return 0, fmt.Errorf("error counting genres with fetched artists: %w", err)
+	}
+	return int(count), nil
+}
+
 func (db *DB) CountGenresToFetchArtists() (int, error) {
 	var count int64
 	if err := db.ro.
@@ -25,6 +48,18 @@ func (db *DB) GetGenresToFetchArtists(limit int) ([]string, error) {
 		return nil, err
 	}
 	return genreNames, nil
+}
+
+func (db *DB) CountArtistsWithFetchedTracks() (int, error) {
+	var count int64
+	if err := db.ro.
+		Table("artists").
+		Where("has_fetched_tracks = true").
+		Count(&count).
+		Error; err != nil {
+		return 0, err
+	}
+	return int(count), nil
 }
 
 func (db *DB) CountArtistsToFetchTracks() (int, error) {
@@ -64,6 +99,18 @@ func (db *DB) CountArtistsToFetchAlbums() (int, error) {
 	return int(count), nil
 }
 
+func (db *DB) CountArtistsWithFetchedAlbums() (int, error) {
+	var count int64
+	if err := db.ro.
+		Table("artists").
+		Where("has_fetched_albums = true").
+		Count(&count).
+		Error; err != nil {
+		return 0, err
+	}
+	return int(count), nil
+}
+
 func (db *DB) GetArtistsToFetchAlbums(limit int) ([]string, error) {
 	artists := []string{}
 	if err := db.ro.
@@ -89,6 +136,18 @@ func (db *DB) CountAlbumsToFetchTracks() (int, error) {
 	return int(count), nil
 }
 
+func (db *DB) CountAlbumsWithFetchedTracks() (int, error) {
+	var count int64
+	if err := db.ro.
+		Table("albums").
+		Where("has_fetched_tracks = true").
+		Count(&count).
+		Error; err != nil {
+		return 0, err
+	}
+	return int(count), nil
+}
+
 func (db *DB) GetAlbumsToFetchTracks(limit int) ([]string, error) {
 	albums := []string{}
 	if err := db.ro.
@@ -100,6 +159,18 @@ func (db *DB) GetAlbumsToFetchTracks(limit int) ([]string, error) {
 		return nil, err
 	}
 	return albums, nil
+}
+
+func (db *DB) CountTracksWithFetchedAnalysis() (int, error) {
+	var count int64
+	if err := db.ro.
+		Table("tracks").
+		Where("has_analysis = true").
+		Count(&count).
+		Error; err != nil {
+		return 0, err
+	}
+	return int(count), nil
 }
 
 func (db *DB) CountTracksToFetchAnalysis() (int, error) {

@@ -59,6 +59,7 @@ type Album struct {
 	ReleaseDatePrecision string
 
 	Artists []Artist `gorm:"-"`
+	Tracks  []Track  `gorm:"-"`
 }
 
 type AlbumArtist struct {

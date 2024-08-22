@@ -60,7 +60,7 @@ type Client struct {
 	expiresAt   time.Time
 }
 
-func (spo *Client) FetchAlbumsTracks(ctx context.Context, albumSpotifyIDs []string) ([]data.Track, error) {
+func (spo *Client) FetchAlbums(ctx context.Context, albumSpotifyIDs []string) ([]data.Album, error) {
 	query := url.Values{}
 	query.Add("ids", strings.Join(albumSpotifyIDs, ","))
 
@@ -76,10 +76,22 @@ func (spo *Client) FetchAlbumsTracks(ctx context.Context, albumSpotifyIDs []stri
 		return nil, fmt.Errorf("albums tracks decode error: %w", err)
 	}
 
-	var tracks []data.Track
+	var albums []data.Album
 
-	for _, album := range results.Albums {
-		for _, track := range album.Tracks.Items {
+	for _, fetched := range results.Albums {
+		album := data.Album{
+			SpotifyID:            fetched.ID,
+			Name:                 fetched.Name,
+			Type:                 fetched.AlbumType,
+			ImageURL:             fetched.Images[0].URL,
+			TotalTracks:          fetched.TotalTracks,
+			HasFetchedTracks:     true,
+			ReleaseDate:          fetched.ReleaseDate,
+			ReleaseDatePrecision: fetched.ReleaseDatePrecision,
+			Artists:              make([]data.Artist, len(fetched.Artists)),
+			Tracks:               make([]data.Track, fetched.Tracks.Total),
+		}
+		for _, track := range fetched.Tracks.Items {
 			artists := make([]data.Artist, len(track.Artists))
 			for i, artist := range track.Artists {
 				artists[i] = data.Artist{
@@ -87,26 +99,26 @@ func (spo *Client) FetchAlbumsTracks(ctx context.Context, albumSpotifyIDs []stri
 					Name:      artist.Name,
 				}
 			}
-			tracks = append(tracks, data.Track{
+			album.Tracks = append(album.Tracks, data.Track{
 				SpotifyID:  track.ID,
 				Name:       track.Name,
 				Popularity: track.Popularity,
 
-				AlbumSpotifyID: album.ID,
-				AlbumName:      album.Name,
+				AlbumSpotifyID: fetched.ID,
+				AlbumName:      fetched.Name,
 				DiscNumber:     track.DiscNumber,
 				TrackNumber:    track.TrackNumber,
 				Artists:        artists,
 			})
 		}
-		if len(album.Tracks.Items) <= album.Tracks.Total {
+		if len(fetched.Tracks.Items) <= fetched.Tracks.Total {
 			continue
 		}
 		for offset := 50; offset < 1000; offset += 50 {
 			query := url.Values{}
 			query.Add("limit", "50")
 			query.Add("offset", fmt.Sprintf("%d", offset))
-			resp, err := spo.get(ctx, fmt.Sprintf("https://api.spotify.com/v1/albums/%s/tracks", album.ID), query)
+			resp, err := spo.get(ctx, fmt.Sprintf("https://api.spotify.com/v1/albums/%s/tracks", fetched.ID), query)
 			if err != nil {
 				return nil, err
 			}
@@ -126,13 +138,13 @@ func (spo *Client) FetchAlbumsTracks(ctx context.Context, albumSpotifyIDs []stri
 						Name:      artist.Name,
 					}
 				}
-				tracks = append(tracks, data.Track{
+				album.Tracks = append(album.Tracks, data.Track{
 					SpotifyID:  track.ID,
 					Name:       track.Name,
 					Popularity: track.Popularity,
 
-					AlbumSpotifyID: album.ID,
-					AlbumName:      album.Name,
+					AlbumSpotifyID: fetched.ID,
+					AlbumName:      fetched.Name,
 					DiscNumber:     track.DiscNumber,
 					TrackNumber:    track.TrackNumber,
 					Artists:        artists,
@@ -144,7 +156,7 @@ func (spo *Client) FetchAlbumsTracks(ctx context.Context, albumSpotifyIDs []stri
 			}
 		}
 	}
-	return tracks, nil
+	return albums, nil
 }
 
 type albumsTracks struct {
