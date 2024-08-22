@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/amonks/genres/data"
@@ -40,10 +39,9 @@ func New(clientID, clientSecret string) *Client {
 	client := &Client{
 		clientID:     clientID,
 		clientSecret: clientSecret,
-		nextReqAtPtr: atomic.Pointer[time.Time]{},
-		delay:        time.Second / 10,
+		nextReqAt:    nextReqAt,
+		delay:        time.Second,
 	}
-	client.setNextReqAt(nextReqAt)
 	return client
 }
 
@@ -53,8 +51,8 @@ type Client struct {
 	clientID     string
 	clientSecret string
 
-	nextReqAtPtr atomic.Pointer[time.Time]
-	delay        time.Duration
+	nextReqAt time.Time
+	delay     time.Duration
 
 	accessToken string
 	expiresAt   time.Time
@@ -564,20 +562,12 @@ type genreSearchResultsPage struct {
 	}
 }
 
-func (spo *Client) nextReqAt() time.Time {
-	return *spo.nextReqAtPtr.Load()
-}
-
-func (spo *Client) setNextReqAt(to time.Time) {
-	spo.nextReqAtPtr.Store(&to)
-}
-
 func (spo *Client) get(ctx context.Context, baseURL string, query url.Values) (io.ReadCloser, error) {
 	spo.mu.Lock()
 	defer spo.mu.Unlock()
 
 retry:
-	nextReqAt := spo.nextReqAt()
+	nextReqAt := spo.nextReqAt
 	if !nextReqAt.IsZero() {
 		now := time.Now()
 		if nextReqAt.Sub(now) > time.Second {
@@ -627,7 +617,7 @@ retry:
 			log.Printf("429; retrying in %s", waitTime)
 			nextReqAt = time.Now().Add(waitTime)
 		}
-		spo.setNextReqAt(nextReqAt)
+		spo.nextReqAt = nextReqAt
 		if err := os.WriteFile(nextReqFilename, []byte(nextReqAt.Format(time.UnixDate)), 0666); err != nil {
 			return nil, err
 		}
@@ -637,7 +627,7 @@ retry:
 		return nil, fmt.Errorf("fetch error: %w", err)
 	}
 
-	spo.setNextReqAt(time.Now().Add(spo.delay))
+	spo.nextReqAt = time.Now().Add(spo.delay)
 
 	return resp.Body, nil
 }
