@@ -36,6 +36,7 @@ func search(ctx context.Context, db *db.DB, args []string) error {
 	header := []string{
 		"artists",
 		"album", "track", "spotify_id",
+		"popularity",
 		"acousticness",
 		"danceability",
 		"energy",
@@ -54,6 +55,7 @@ func search(ctx context.Context, db *db.DB, args []string) error {
 		fmt.Fprintf(tw, strings.Join([]string{
 			strings.Join(artists, ", "),
 			track.AlbumName, track.Name, track.SpotifyID,
+			fmt.Sprintf("%d", track.Popularity),
 			fmt.Sprintf("%f", track.Acousticness),
 			fmt.Sprintf("%f", track.Danceability),
 			fmt.Sprintf("%f", track.Energy),
