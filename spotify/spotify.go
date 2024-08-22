@@ -76,6 +76,8 @@ func (spo *Client) FetchAlbums(ctx context.Context, albumSpotifyIDs []string) ([
 
 	var albums []data.Album
 
+	now := time.Now()
+
 	for _, fetched := range results.Albums {
 		album := data.Album{
 			SpotifyID:            fetched.ID,
@@ -83,7 +85,7 @@ func (spo *Client) FetchAlbums(ctx context.Context, albumSpotifyIDs []string) ([
 			Type:                 fetched.AlbumType,
 			ImageURL:             fetched.Images[0].URL,
 			TotalTracks:          fetched.TotalTracks,
-			HasFetchedTracks:     true,
+			FetchedTracksAt:      &now,
 			ReleaseDate:          fetched.ReleaseDate,
 			ReleaseDatePrecision: fetched.ReleaseDatePrecision,
 			Artists:              make([]data.Artist, len(fetched.Artists)),
@@ -268,7 +270,6 @@ func (spo *Client) FetchArtistAlbums(ctx context.Context, artistSpotifyID string
 				Type:                 album.AlbumType,
 				ImageURL:             imageURL,
 				TotalTracks:          album.TotalTracks,
-				HasFetchedTracks:     false,
 				ReleaseDate:          album.ReleaseDate,
 				ReleaseDatePrecision: album.ReleaseDatePrecision,
 				Artists:              artists,

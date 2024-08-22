@@ -33,7 +33,6 @@ func runAlbumTracksFetcher(ctx context.Context, c chan<- struct{}, db *db.DB, sp
 			if err := ctx.Err(); err != nil {
 				return fmt.Errorf("canceled: %w", err)
 			}
-
 			if err := db.PopulateAlbum(ctx, &album); err != nil {
 				return err
 			}

@@ -39,7 +39,7 @@ func (db *DB) CountTracksToIndex(ctx context.Context) (int, error) {
 	var count int64
 	if err := db.ro.
 		Table("tracks").
-		Where("has_search = false").
+		Where("indexed_search_at is null").
 		Count(&count).
 		Error; err != nil {
 		return 0, fmt.Errorf("error counting tracks to index: %w", err)
@@ -51,11 +51,11 @@ func (db *DB) GetTracksToIndex(ctx context.Context, limit int) ([]data.Track, er
 	var ids []string
 	if err := db.ro.
 		Table("tracks").
-		Where("has_search = false").
+		Where("indexed_search_at is null").
 		Limit(limit).
 		Pluck("spotify_id", &ids).
 		Error; err != nil {
-		return nil, fmt.Errorf("error getting %d tracks where has_search=false: %w", limit, err)
+		return nil, fmt.Errorf("error getting %d tracks where indexed_search_at is null: %w", limit, err)
 	}
 	if len(ids) == 0 {
 		return nil, nil
@@ -105,7 +105,7 @@ func (db *DB) IndexTracks(ctx context.Context, tracks []data.Track) error {
 		if err := tx.
 			Table("tracks").
 			Where("spotify_id in ?", ids).
-			Update("has_search", true).
+			Update("indexed_search_at", &time.Now()).
 			Error; err != nil {
 			return fmt.Errorf("error marking %d tracks as indexed: %w", len(ids), err)
 		}

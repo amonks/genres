@@ -89,9 +89,9 @@ func (vis *Visualization) ToGenres() []*data.Genre {
 	out := make([]*data.Genre, len(vis.Genres))
 	for i, genre := range vis.Genres {
 		out[i] = &data.Genre{
-			Name:       genre.Name,
-			Key:        genre.Key,
-			Example:    genre.Example,
+			Name:    genre.Name,
+			Key:     genre.Key,
+			Example: genre.Example,
 
 			Energy:           normalize(vis.MinRed, vis.MaxRed, genre.Red()),
 			DynamicVariation: normalize(vis.MinGreen, vis.MaxGreen, genre.Green()),
@@ -152,6 +152,6 @@ func hexToInt(hex string) int64 {
 	return int64(ui)
 }
 
-func normalize(min, max, value int64) int64 {
-	return int64(float64(value-min) / float64(max-min) * 4096)
+func normalize(min, max, value int64) float64 {
+	return float64(value-min) / float64(max-min)
 }
