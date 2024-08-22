@@ -62,6 +62,14 @@ func (eng *engine) start(ctx context.Context) error {
 			} else {
 				log.Printf("done:\t%s", name)
 			}
+			go func() {
+				eng.mu.Lock()
+				defer eng.mu.Unlock()
+
+				worker := eng.workers[name]
+				worker.isRunning = false
+				eng.workers[name] = worker
+			}()
 			return err
 		})
 	}
@@ -83,7 +91,6 @@ func (eng *engine) start(ctx context.Context) error {
 			return
 		}
 
-		log.Printf("RETRIGGER:\t%s", name)
 		run(name)
 	}
 
