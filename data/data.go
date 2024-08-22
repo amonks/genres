@@ -1,5 +1,7 @@
 package data
 
+import "time"
+
 // Genres holds the list of genres extracted from everynoise.com.
 //
 // Genres have many artists via the association table artist_genres.
@@ -17,13 +19,10 @@ type Genre struct {
 	// properly.
 	Example string
 
-	// A value in the range [0, 4096], derived from the ENAO visualization.
-	Energy, DynamicVariation, Instrumentalness int64
+	// A value in the range [0, 1], derived from the ENAO visualization.
+	Energy, DynamicVariation, Instrumentalness, Organicness, Bounciness, Popularity float64
 
-	// A value in the range [0, 4096], derived from the ENAO visualization.
-	Organicness, Bounciness, Popularity int64
-
-	HasFetchedArtists bool
+	FetchedArtistsAt *time.Time
 }
 
 // Artists holds the artists we've found using Spotify's search API. We try to
@@ -42,8 +41,8 @@ type Artist struct {
 	Popularity int64
 	Genres     []string `gorm:"-"`
 
-	HasFetchedTracks bool
-	HasFetchedAlbums bool
+	FetchedTracksAt *time.Time
+	FetchedAlbumsAt *time.Time
 }
 
 type Album struct {
@@ -52,8 +51,8 @@ type Album struct {
 	Type      string
 	ImageURL  string
 
-	TotalTracks      int64
-	HasFetchedTracks bool
+	TotalTracks     int64
+	FetchedTracksAt *time.Time
 
 	ReleaseDate          string
 	ReleaseDatePrecision string
@@ -112,7 +111,9 @@ type Track struct {
 
 	Artists []Artist `gorm:"-"`
 
-	HasAnalysis bool
+	FetchedAnalysisAt *time.Time
+	FailedAnalysisAt  *time.Time
+	IndexedSearchAt   *time.Time
 
 	Key           int64
 	Mode          int64
@@ -130,7 +131,7 @@ type Track struct {
 }
 
 func (t *Track) Vector() Vector {
-	if !t.HasAnalysis {
+	if t.FetchedAnalysisAt == nil {
 		return Vector{}
 	}
 	return Vector{

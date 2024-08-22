@@ -12,18 +12,18 @@ create table if not exists genres (
         key         string,
         example     string,
 
-        energy            integer,
-        dynamic_variation integer,
-        instrumentalness  integer,
-        organicness       integer,
-        bounciness        integer,
+        energy            real,
+        dynamic_variation real,
+        instrumentalness  real,
+        organicness       real,
+        bounciness        real,
 
-        popularity        integer,
+        popularity        real,
 
-        has_fetched_artists boolean not null default false
+        fetched_artists_at text
 );
 
-create index if not exists genres_by_has_fetched_artists on genres ( has_fetched_artists );
+create index if not exists genres_by_fetched_artists_at on genres ( fetched_artists_at );
 
 -- Artists holds the artists we've found using Spotify's search API. We try to
 -- fetch the thousand first artists returned by a search for each genre.
@@ -40,12 +40,12 @@ create table if not exists artists (
         followers  integer,
         popularity integer,
 
-        has_fetched_tracks boolean not null default false,
-        has_fetched_albums boolean not null default false
+        fetched_tracks_at text,
+        fetched_albums_at text
 );
 
-create index if not exists artists_by_has_fetched_tracks on artists ( has_fetched_tracks );
-create index if not exists artists_by_has_fetched_albums on artists ( has_fetched_albums );
+create index if not exists artists_by_fetched_tracks_at on artists ( fetched_tracks_at );
+create index if not exists artists_by_fetched_albums_at on artists ( fetched_albums_at );
 
 create table if not exists albums (
         spotify_id   text primary key,
@@ -61,10 +61,10 @@ create table if not exists albums (
         -- Allowed values: "year", "month", "day"
         release_date_precision text,
 
-        has_fetched_tracks boolean not null default false
+        fetched_tracks_at text
 );
 
-create index if not exists albums_by_has_fetched_tracks on albums ( has_fetched_tracks );
+create index if not exists albums_by_fetched_tracks_at on albums ( fetched_tracks_at );
 
 -- artists_rtree stores the bounds of each artist within 5-dimensional genre
 -- space, and can be used for geospatial-style range queries.
@@ -105,9 +105,9 @@ create table if not exists tracks (
         disc_number      integer,
         track_number     integer,
 
-        has_analysis     boolean not null default false,
-        failed_analysis  boolean not null default false,
-        has_search       boolean not null default false,
+        fetched_analysis_at text,
+        failed_analysis_at text,
+        indexed_search_at text,
 
         key              integer,
         mode             integer,
@@ -124,8 +124,9 @@ create table if not exists tracks (
         valence          real
 );
 
-create index if not exists tracks_by_has_analysis on tracks ( has_analysis );
-create index if not exists tracks_by_has_search   on tracks ( has_search   );
+create index if not exists tracks_by_fetched_analysis_at on tracks ( fetched_analysis_at );
+create index if not exists tracks_by_failed_analysis_at  on tracks ( failed_analysis_at );
+create index if not exists tracks_by_indexed_search_at   on tracks ( indexed_search_at );
 
 create index if not exists tracks_by_key               on tracks ( key              );
 create index if not exists tracks_by_mode              on tracks ( mode             );

@@ -26,32 +26,17 @@ func (db *DB) InsertGenre(genre *data.Genre) error {
 	return nil
 }
 
-func (db *DB) MarkAlbumTracksFetched(albumSpotifyID string) error {
-	defer db.hold()()
-
-	if albumSpotifyID == "" {
-		return fmt.Errorf("no spotify id")
-	}
-	if err := db.rw.
-		Table("albums").
-		Where("spotify_id = ?", albumSpotifyID).
-		Update("has_fetched_tracks", true).
-		Error; err != nil {
-		return fmt.Errorf("error marking album '%s' tracks as fetched: %w", albumSpotifyID, err)
-	}
-	return nil
-}
-
 func (db *DB) MarkArtistAlbumsFetched(artistSpotifyID string) error {
 	defer db.hold()()
 
 	if artistSpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
+	now := time.Now()
 	if err := db.rw.
 		Table("artists").
 		Where("spotify_id = ?", artistSpotifyID).
-		Update("has_fetched_albums", true).
+		Update("fetched_albums_at", &now).
 		Error; err != nil {
 		return fmt.Errorf("error marking artist '%s' albums as fetched: %w", artistSpotifyID, err)
 	}
@@ -64,10 +49,11 @@ func (db *DB) MarkGenreFetched(genreName string) error {
 	if genreName == "" {
 		return fmt.Errorf("no spotify id")
 	}
+	now := time.Now()
 	if err := db.rw.
 		Table("genres").
 		Where("name = ?", genreName).
-		Update("has_fetched_artists", true).
+		Update("fetched_artists_at", &now).
 		Error; err != nil {
 		return fmt.Errorf("error marking genre '%s' as fetched: %w", genreName, err)
 	}
@@ -80,10 +66,11 @@ func (db *DB) MarkArtistFetched(artistSpotifyID string) error {
 	if artistSpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
+	now := time.Now()
 	if err := db.rw.
 		Table("artists").
 		Where("spotify_id = ?", artistSpotifyID).
-		Update("has_fetched_tracks", true).
+		Update("fetched_tracks_at", &now).
 		Error; err != nil {
 		return fmt.Errorf("error marking artist '%s' as fetched: %w", artistSpotifyID, err)
 	}
@@ -93,12 +80,12 @@ func (db *DB) MarkArtistFetched(artistSpotifyID string) error {
 func (db *DB) MarkTrackAnalysisFailed(tracks []string) error {
 	defer db.hold()()
 
+	now := time.Now()
 	if err := db.rw.
 		Table("tracks").
 		Where("spotify_id in ?", tracks).
-		Updates(map[string]interface{}{
-			"failed_analysis": true,
-		}).Error; err != nil {
+		Update("failed_analysis_at", &now).
+		Error; err != nil {
 		return fmt.Errorf("error marking %d tracks as failed", len(tracks))
 	}
 	return nil
@@ -110,12 +97,12 @@ func (db *DB) AddTrackAnalysis(track *data.Track) error {
 	if track.SpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
+	now := time.Now()
 	if err := db.rw.
 		Table("tracks").
 		Where("spotify_id = ?", track.SpotifyID).
 		Updates(map[string]interface{}{
-			// NOTE:
-			"has_analysis": true,
+			"fetched_analysis_at": &now,
 
 			"key":            track.Key,
 			"mode":           track.Mode,
@@ -144,9 +131,11 @@ func (db *DB) PopulateAlbum(ctx context.Context, album *data.Album) error {
 		return fmt.Errorf("no spotify id")
 	}
 	return db.rw.Transaction(func(db *gorm.DB) error {
+		now := time.Now()
 		if err := db.
 			Where("spotify_id = ?", album.SpotifyID).
 			Updates(map[string]any{
+				"fetched_tracks_at":      &now,
 				"name":                   album.Name,
 				"type":                   album.Type,
 				"image_url":              album.ImageURL,

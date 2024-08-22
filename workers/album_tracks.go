@@ -45,13 +45,6 @@ func runAlbumTracksFetcher(ctx context.Context, c chan<- struct{}, db *db.DB, sp
 					return err
 				}
 			}
-			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("canceled: %w", err)
-			}
-
-			if err := db.MarkAlbumTracksFetched(album.SpotifyID); err != nil {
-				return err
-			}
 		}
 
 		c <- struct{}{}

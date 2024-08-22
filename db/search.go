@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/amonks/genres/data"
 	"gorm.io/gorm"
@@ -102,10 +103,11 @@ func (db *DB) IndexTracks(ctx context.Context, tracks []data.Track) error {
 			return fmt.Errorf("canceled: %w", err)
 		}
 
+		now := time.Now()
 		if err := tx.
 			Table("tracks").
 			Where("spotify_id in ?", ids).
-			Update("indexed_search_at", &time.Now()).
+			Update("indexed_search_at", &now).
 			Error; err != nil {
 			return fmt.Errorf("error marking %d tracks as indexed: %w", len(ids), err)
 		}
