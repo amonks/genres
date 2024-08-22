@@ -61,7 +61,7 @@ create table if not exists albums (
         -- Allowed values: "year", "month", "day"
         release_date_precision text,
 
-        has_fetched_tracks boolean not null default false,
+        has_fetched_tracks boolean not null default false
 );
 
 create index if not exists albums_by_has_fetched_tracks on albums ( has_fetched_tracks );
