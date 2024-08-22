@@ -21,6 +21,9 @@ func runAlbumTracksFetcher(ctx context.Context, c chan<- struct{}, db *db.DB, sp
 		if len(albums) == 0 {
 			return nil
 		}
+		if len(albums) < 20 {
+			return nil
+		}
 
 		fetched, err := spo.FetchAlbums(ctx, albums)
 		if err != nil {

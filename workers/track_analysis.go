@@ -22,6 +22,9 @@ func runTrackAnalysisFetcher(ctx context.Context, c chan<- struct{}, db *db.DB, 
 		if len(tracks) == 0 {
 			return nil
 		}
+		if len(tracks) < 100 {
+			return nil
+		}
 
 		analyses, err := spo.FetchTrackAnalyses(ctx, tracks)
 		if err != nil {

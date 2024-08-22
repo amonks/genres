@@ -7,7 +7,9 @@ import (
 	"github.com/amonks/genres/db"
 )
 
-func runIndexer(ctx context.Context, c chan<- struct{}, db *db.DB, batchSize int) error {
+func runIndexer(ctx context.Context, c chan<- struct{}, db *db.DB) error {
+	const batchSize = 1_000
+
 	for {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("canceled: %w", err)
