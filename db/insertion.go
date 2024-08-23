@@ -18,7 +18,9 @@ func (db *DB) InsertGenre(genre *data.Genre) error {
 	if genre.Name == "" {
 		return fmt.Errorf("no genre name")
 	}
+
 	if err := db.rw.
+		Table("genres").
 		Clauses(clause.OnConflict{DoNothing: true}).
 		Create(&genre).
 		Error; err != nil {
@@ -33,6 +35,7 @@ func (db *DB) MarkArtistAlbumsFetched(artistSpotifyID string) error {
 	if artistSpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
+
 	if err := db.rw.
 		Table("artists").
 		Where("spotify_id = ?", artistSpotifyID).
@@ -49,6 +52,7 @@ func (db *DB) MarkGenreFetched(genreName string) error {
 	if genreName == "" {
 		return fmt.Errorf("no spotify id")
 	}
+
 	if err := db.rw.
 		Table("genres").
 		Where("name = ?", genreName).
@@ -65,6 +69,7 @@ func (db *DB) MarkArtistFetched(artistSpotifyID string) error {
 	if artistSpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
+
 	if err := db.rw.
 		Table("artists").
 		Where("spotify_id = ?", artistSpotifyID).
@@ -117,6 +122,7 @@ func (db *DB) AddTrackAnalysis(track *data.Track) error {
 		Error; err != nil {
 		return fmt.Errorf("error adding track analysis for '%s': %w", track.SpotifyID, err)
 	}
+
 	return nil
 }
 
@@ -126,8 +132,10 @@ func (db *DB) PopulateAlbum(ctx context.Context, album *data.Album) error {
 	if album.SpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
+
 	return db.rw.Transaction(func(db *gorm.DB) error {
 		if err := db.
+			Table("albums").
 			Where("spotify_id = ?", album.SpotifyID).
 			Updates(map[string]any{
 				"fetched_tracks_at":      sql.NullTime{Time: time.Now(), Valid: true},
@@ -138,51 +146,53 @@ func (db *DB) PopulateAlbum(ctx context.Context, album *data.Album) error {
 				"release_date":           album.ReleaseDate,
 				"release_date_precision": album.ReleaseDatePrecision,
 			}).Error; err != nil {
-			return fmt.Errorf("error inserting album '%s': %w", album.Name, err)
+			return fmt.Errorf("error populating album '%s': %w", album.SpotifyID, err)
+		}
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("canceled: %w", err)
 		}
 
 		for _, artist := range album.Artists {
-			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("canceled: %w", err)
-			}
-
 			if artist.SpotifyID == "" {
 				return fmt.Errorf("no spotify id")
 			}
+
 			if err := db.
+				Table("artists").
 				Clauses(clause.OnConflict{DoNothing: true}).
 				Create(artist).
 				Error; err != nil {
-				return fmt.Errorf("error inserting artist '%s': %w", artist.Name, err)
+				return fmt.Errorf("error inserting artist '%s' for populating album '%s': %w", artist.SpotifyID, album.SpotifyID, err)
 			}
-
 			if err := ctx.Err(); err != nil {
 				return fmt.Errorf("canceled: %w", err)
 			}
 
 			if err := db.
+				Table("album_artists").
 				Clauses(clause.OnConflict{DoNothing: true}).
 				Create(&data.AlbumArtist{
 					AlbumSpotifyID:  album.SpotifyID,
 					ArtistSpotifyID: artist.SpotifyID,
 				}).
 				Error; err != nil {
-				return fmt.Errorf("error inserting album artist {'%s' '%s'}: %w", album.Name, artist.Name, err)
+				return fmt.Errorf("error inserting album_artist '%s' for populating album '%s': %w", artist.SpotifyID, album.SpotifyID, err)
 			}
-
-		}
-
-		for _, track := range album.Tracks {
 			if err := ctx.Err(); err != nil {
 				return fmt.Errorf("canceled: %w", err)
 			}
+		}
 
+		for _, track := range album.Tracks {
 			if err := db.
 				Table("tracks").
 				Clauses(clause.OnConflict{DoNothing: true}).
 				Create(track).
 				Error; err != nil {
-				return fmt.Errorf("error inserting album track {'%s' '%s'}: %w", album.Name, track.Name, err)
+				return fmt.Errorf("error inserting track '%s' from album '%s': %w", track.SpotifyID, album.SpotifyID, err)
+			}
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("canceled: %w", err)
 			}
 
 			if err := db.
@@ -193,9 +203,11 @@ func (db *DB) PopulateAlbum(ctx context.Context, album *data.Album) error {
 					TrackSpotifyID: track.SpotifyID,
 				}).
 				Error; err != nil {
-				return fmt.Errorf("error inserting album track {'%s' '%s'}: %w", album.Name, track.Name, err)
+				return fmt.Errorf("error inserting album_track {'%s' '%s'}: %w", album.SpotifyID, track.SpotifyID, err)
 			}
-
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("canceled: %w", err)
+			}
 		}
 
 		return nil
@@ -208,39 +220,47 @@ func (db *DB) InsertAlbum(ctx context.Context, album *data.Album) error {
 	if album.SpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
+
 	return db.rw.Transaction(func(db *gorm.DB) error {
 		if err := db.
+			Table("albums").
 			Clauses(clause.OnConflict{UpdateAll: true}).
 			Create(album).
 			Error; err != nil {
-			return fmt.Errorf("error inserting album '%s': %w", album.Name, err)
+			return fmt.Errorf("error inserting album '%s': %w", album.SpotifyID, err)
 		}
-		for _, artist := range album.Artists {
-			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("canceled: %w", err)
-			}
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("canceled: %w", err)
+		}
 
+		for _, artist := range album.Artists {
 			if artist.SpotifyID == "" {
 				return fmt.Errorf("no spotify id")
 			}
+
 			if err := db.
+				Table("artists").
 				Clauses(clause.OnConflict{DoNothing: true}).
 				Create(artist).
 				Error; err != nil {
-				return fmt.Errorf("error inserting artist '%s': %w", artist.Name, err)
+				return fmt.Errorf("error inserting artist '%s' for album '%s': %w", artist.SpotifyID, album.SpotifyID, err)
 			}
 			if err := ctx.Err(); err != nil {
 				return fmt.Errorf("canceled: %w", err)
 			}
 
 			if err := db.
+				Table("album_artists").
 				Clauses(clause.OnConflict{DoNothing: true}).
 				Create(&data.AlbumArtist{
 					AlbumSpotifyID:  album.SpotifyID,
 					ArtistSpotifyID: artist.SpotifyID,
 				}).
 				Error; err != nil {
-				return fmt.Errorf("error inserting album artist {'%s' '%s'}: %w", album.Name, artist.Name, err)
+				return fmt.Errorf("error inserting album_artist '%s' for album '%s': %w", artist.SpotifyID, album.SpotifyID, err)
+			}
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("canceled: %w", err)
 			}
 		}
 
@@ -276,7 +296,7 @@ func (db *DB) InsertTrack(ctx context.Context, track *data.Track) error {
 					Name:      track.AlbumName,
 				}).
 				Error; err != nil {
-				return fmt.Errorf("error inserting album '%s': %w", track.AlbumName, err)
+				return fmt.Errorf("error inserting album '%s' for track '%s': %w", track.AlbumSpotifyID, track.SpotifyID, err)
 			}
 			if err := ctx.Err(); err != nil {
 				return fmt.Errorf("canceled: %w", err)
@@ -285,25 +305,12 @@ func (db *DB) InsertTrack(ctx context.Context, track *data.Track) error {
 			if err := db.
 				Table("album_tracks").
 				Clauses(clause.OnConflict{DoNothing: true}).
-				Create(&data.Album{
-					SpotifyID: track.AlbumSpotifyID,
-					Name:      track.AlbumName,
-				}).
-				Error; err != nil {
-				return fmt.Errorf("error inserting album track {'%s', '%s'}: %w", track.AlbumName, track.Name, err)
-			}
-			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("canceled: %w", err)
-			}
-
-			if err := db.
-				Clauses(clause.OnConflict{DoNothing: true}).
 				Create(&data.AlbumTrack{
 					TrackSpotifyID: track.SpotifyID,
 					AlbumSpotifyID: track.AlbumSpotifyID,
 				}).
 				Error; err != nil {
-				return fmt.Errorf("error inserting album track {'%s', '%s'}: %w", track.AlbumSpotifyID, track.SpotifyID, err)
+				return fmt.Errorf("error inserting album_track '%s' for track '%s': %w", track.AlbumSpotifyID, track.SpotifyID, err)
 			}
 			if err := ctx.Err(); err != nil {
 				return fmt.Errorf("canceled: %w", err)
@@ -311,31 +318,33 @@ func (db *DB) InsertTrack(ctx context.Context, track *data.Track) error {
 		}
 
 		for _, artist := range track.Artists {
-			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("canceled: %w", err)
-			}
-
 			if artist.SpotifyID == "" {
 				return fmt.Errorf("no spotify id")
 			}
+
 			if err := db.
+				Table("artists").
 				Clauses(clause.OnConflict{DoNothing: true}).
 				Create(artist).
 				Error; err != nil {
-				return fmt.Errorf("error inserting artist '%s': %w", artist.Name, err)
+				return fmt.Errorf("error inserting artist '%s' for track '%s': %w", artist.SpotifyID, track.SpotifyID, err)
 			}
 			if err := ctx.Err(); err != nil {
 				return fmt.Errorf("canceled: %w", err)
 			}
 
 			if err := db.
+				Table("track_artists").
 				Clauses(clause.OnConflict{DoNothing: true}).
 				Create(&data.TrackArtist{
 					TrackSpotifyID:  track.SpotifyID,
 					ArtistSpotifyID: artist.SpotifyID,
 				}).
 				Error; err != nil {
-				return fmt.Errorf("error inserting track artist {'%s', '%s'}: %w", track.Name, artist.Name, err)
+				return fmt.Errorf("error inserting track_artist '%s' for track '%s': %w", artist.SpotifyID, track.SpotifyID, err)
+			}
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("canceled: %w", err)
 			}
 		}
 
@@ -354,32 +363,45 @@ func (db *DB) InsertArtist(ctx context.Context, artist *data.Artist) error {
 
 	return db.rw.Transaction(func(db *gorm.DB) error {
 		if err := db.
+			Table("artists").
 			Clauses(clause.OnConflict{DoNothing: true}).
 			Create(artist).
 			Error; err != nil {
-			return fmt.Errorf("error inserting artist '%s' into artists: %w", artist.Name, err)
+			return fmt.Errorf("error inserting artist '%s': %w", artist.SpotifyID, err)
 		}
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("canceled: %w", err)
 		}
 
 		for _, genre := range artist.Genres {
-			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("canceled: %w", err)
-			}
-
 			if genre == "" {
 				return fmt.Errorf("no genre name")
 			}
+
 			if err := db.
+				Table("genres").
+				Clauses(clause.OnConflict{DoNothing: true}).
+				Create(&data.Genre{
+					Name: genre,
+				}).
+				Error; err != nil {
+				fmt.Errorf("error inserting genre '%s' for artist '%s': %w", genre, artist.SpotifyID, err)
+			}
+
+			if err := db.
+				Table("artist_genres").
 				Clauses(clause.OnConflict{DoNothing: true}).
 				Create(&data.ArtistGenre{
 					ArtistSpotifyID: artist.SpotifyID,
 					GenreName:       genre,
 				}).
 				Error; err != nil {
-				return fmt.Errorf("error inserting artist_genre for artist '%s' and genre '%s': %w", artist.Name, genre, err)
+				return fmt.Errorf("error inserting artist_genre '%s' for artist '%s': %w", genre, artist.SpotifyID, err)
 			}
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("canceled: %w", err)
+			}
+
 		}
 
 		return nil
