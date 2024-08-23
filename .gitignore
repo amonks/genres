@@ -1,7 +1,8 @@
-genres.db
-.envrc
-next-req
-TODO
+/genres.db
+/.envrc
+/next-req
+/TODO
 /genres
-log.tsv
-counts.log
+/log.tsv
+/counts.log
+/req-cache/req-*

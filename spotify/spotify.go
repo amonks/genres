@@ -1,9 +1,12 @@
 package spotify
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,7 +25,10 @@ import (
 	"github.com/amonks/genres/request"
 )
 
-const nextReqFilename = "next-req"
+const (
+	nextReqFilename = "next-req"
+	cacheDir        = "req-cache"
+)
 
 // New creates a new Spotify client, with the given clientID and clientSecret.
 func New(clientID, clientSecret string) *Client {
@@ -570,6 +577,23 @@ func (spo *Client) get(ctx context.Context, baseURL string, query url.Values) (i
 	spo.mu.Lock()
 	defer spo.mu.Unlock()
 
+	url, _ := url.Parse(baseURL)
+	url.RawQuery = query.Encode()
+
+	var hasher = sha256.New()
+	hasher.Write([]byte(url.String()))
+	hash := hex.EncodeToString(hasher.Sum(nil))
+	cacheFilename := filepath.Join(cacheDir, "req-"+hash)
+	if _, err := os.Stat(cacheFilename); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("error checking for cache file '%s': %w", hash, err)
+	} else if err == nil {
+		cache, err := os.OpenFile(cacheFilename, os.O_RDONLY, 0o666)
+		if err != nil {
+			return nil, fmt.Errorf("error opening cache file '%s' for read: %w", hash, err)
+		}
+		return cache, nil
+	}
+
 retry:
 	nextReqAt := spo.nextReqAt
 	if !nextReqAt.IsZero() {
@@ -589,8 +613,6 @@ retry:
 		}
 	}
 
-	url, _ := url.Parse(baseURL)
-	url.RawQuery = query.Encode()
 	req, err := http.NewRequest("GET", url.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("request error: %w", err)
@@ -633,7 +655,19 @@ retry:
 
 	spo.nextReqAt = time.Now().Add(spo.delay)
 
-	return resp.Body, nil
+	cache, err := os.OpenFile(cacheFilename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
+	if err != nil {
+		return nil, fmt.Errorf("error opening cache file '%s' for write: %w", hash, err)
+	}
+	defer cache.Close()
+
+	var buf bytes.Buffer
+	tee := io.TeeReader(resp.Body, cache)
+	if _, err := io.Copy(&buf, tee); err != nil {
+		return nil, fmt.Errorf("error writing cache file '%s': %w", hash, err)
+	}
+
+	return io.NopCloser(&buf), nil
 }
 
 type tokenResult struct {
