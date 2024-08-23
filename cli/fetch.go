@@ -21,6 +21,9 @@ func fetch(ctx context.Context, db *db.DB, args []string) error {
 	if clientID == "" || clientSecret == "" {
 		return fmt.Errorf("must set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET")
 	}
-	spo := spotify.New(clientID, clientSecret)
+	spo, err := spotify.New(clientID, clientSecret)
+	if err != nil {
+		return fmt.Errorf("error creating spotify client: %w", err)
+	}
 	return workers.Run(ctx, db, spo)
 }

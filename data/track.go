@@ -22,6 +22,7 @@ type Track struct {
 	Mode          int64
 	Tempo         float64
 	TimeSignature int64
+	DurationMS    int64 `gorm:"column:duration_ms"`
 
 	Acousticness     float64
 	Danceability     float64

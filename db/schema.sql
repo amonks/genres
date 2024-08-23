@@ -100,6 +100,7 @@ create table if not exists tracks (
         mode             integer,
         tempo            real,
         time_signature   integer,
+        duration_ms      integer,
 
         acousticness     real,
         danceability     real,

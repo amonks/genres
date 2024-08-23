@@ -1,12 +1,9 @@
 package spotify
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,14 +11,13 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/amonks/genres/data"
+	"github.com/amonks/genres/limiter"
+	"github.com/amonks/genres/readthrough"
 	"github.com/amonks/genres/request"
 )
 
@@ -31,36 +27,31 @@ const (
 )
 
 // New creates a new Spotify client, with the given clientID and clientSecret.
-func New(clientID, clientSecret string) *Client {
-	var nextReqAt time.Time
-	if _, err := os.Stat(nextReqFilename); !errors.Is(err, os.ErrNotExist) {
-		bs, err := os.ReadFile(nextReqFilename)
-		if err != nil {
-			panic(err)
-		}
-		nextReqAt, err = time.Parse(time.UnixDate, string(bs))
-		if err != nil {
-			panic(err)
-		}
+func New(clientID, clientSecret string) (*Client, error) {
+	lim := limiter.New(nextReqFilename, time.Second)
+	if err := lim.Load(); err != nil {
+		return nil, err
 	}
 
 	client := &Client{
+		lim:   lim,
+		cache: readthrough.New(cacheDir, "req-"),
+
 		clientID:     clientID,
 		clientSecret: clientSecret,
-		nextReqAt:    nextReqAt,
-		delay:        time.Second,
 	}
-	return client
+
+	return client, nil
 }
 
 type Client struct {
 	mu sync.Mutex
 
+	lim   *limiter.Limiter
+	cache *readthrough.ReadThrough
+
 	clientID     string
 	clientSecret string
-
-	nextReqAt time.Time
-	delay     time.Duration
 
 	accessToken string
 	expiresAt   time.Time
@@ -391,6 +382,7 @@ func (spo *Client) FetchTrackAnalyses(ctx context.Context, ids []string) ([]data
 			Mode:          track.Mode,
 			Tempo:         track.Tempo,
 			TimeSignature: track.TimeSignature,
+			DurationMS:    track.DurationMS,
 
 			Acousticness:     track.Acousticness,
 			Danceability:     track.Danceability,
@@ -414,6 +406,7 @@ type trackAnalysesResults struct {
 		Mode          int64
 		Tempo         float64
 		TimeSignature int64
+		DurationMS    int64 `json:"duration_ms"`
 
 		Acousticness     float64
 		Danceability     float64
@@ -599,38 +592,16 @@ func (spo *Client) get(ctx context.Context, baseURL string, query url.Values) (i
 	url, _ := url.Parse(baseURL)
 	url.RawQuery = query.Encode()
 
-	var hasher = sha256.New()
-	hasher.Write([]byte(url.String()))
-	hash := hex.EncodeToString(hasher.Sum(nil))
-	cacheFilename := filepath.Join(cacheDir, "req-"+hash)
-	if _, err := os.Stat(cacheFilename); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("error checking for cache file '%s': %w", hash, err)
+	if got, key, err := spo.cache.Get(url.String()); err != nil && !errors.Is(err, readthrough.ErrMiss) {
+		return nil, err
 	} else if err == nil {
-		log.Printf("[spotify] cache hit for '%s'", hash)
-		cache, err := os.Open(cacheFilename)
-		if err != nil {
-			return nil, fmt.Errorf("error opening cache file '%s' for read: %w", hash, err)
-		}
-		return cache, nil
+		log.Printf("[spotify] cache hit for '%s'", key)
+		return got, nil
 	}
 
 retry:
-	nextReqAt := spo.nextReqAt
-	if !nextReqAt.IsZero() {
-		now := time.Now()
-		if nextReqAt.Sub(now) > time.Second {
-			log.Printf("next request in %s at %s", nextReqAt.Sub(now).Truncate(time.Second), nextReqAt.Format(time.StampMilli))
-		}
-	wait:
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(time.Until(nextReqAt)):
-			break wait
-		}
-		if err := os.Remove(nextReqFilename); err != nil && !errors.Is(err, os.ErrNotExist) {
-			panic(err)
-		}
+	if err := spo.lim.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("rate limiter error: %w", err)
 	}
 
 	req, err := http.NewRequest("GET", url.String(), nil)
@@ -649,22 +620,7 @@ retry:
 		return nil, fmt.Errorf("request error: %w", err)
 	}
 	if resp.StatusCode == 429 {
-		spo.delay = 2 * spo.delay
-		var nextReqAt time.Time
-		if retryAfter := resp.Header.Get("Retry-After"); retryAfter == "" {
-			log.Printf("no retry-after header on 429; retrying in 1 minute")
-			nextReqAt = time.Now().Add(time.Minute)
-		} else {
-			seconds, err := strconv.ParseInt(retryAfter, 10, 64)
-			if err != nil {
-				return nil, err
-			}
-			waitTime := time.Duration(seconds)*time.Second + time.Second
-			log.Printf("429; retrying in %s", waitTime)
-			nextReqAt = time.Now().Add(waitTime)
-		}
-		spo.nextReqAt = nextReqAt
-		if err := os.WriteFile(nextReqFilename, []byte(nextReqAt.Format(time.UnixDate)), 0666); err != nil {
+		if err := spo.lim.SetNextAt(resp.Header.Get("Retry-After")); err != nil {
 			return nil, err
 		}
 		goto retry
@@ -673,21 +629,14 @@ retry:
 		return nil, fmt.Errorf("fetch error: %w", err)
 	}
 
-	spo.nextReqAt = time.Now().Add(spo.delay)
+	spo.lim.Delay()
 
-	cache, err := os.Create(cacheFilename)
+	r, hash, err := spo.cache.Set(url.String(), resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("error opening cache file '%s' for write: %w", hash, err)
-	}
-	defer cache.Close()
-
-	var buf bytes.Buffer
-	tee := io.TeeReader(resp.Body, cache)
-	if _, err := io.Copy(&buf, tee); err != nil {
 		return nil, fmt.Errorf("error writing cache file '%s': %w", hash, err)
 	}
 
-	return io.NopCloser(&buf), nil
+	return r, nil
 }
 
 type tokenResult struct {
