@@ -256,7 +256,7 @@ func (db *DB) InsertAlbum(ctx context.Context, album *data.Album) error {
 	return db.rw.Transaction(func(db *gorm.DB) error {
 		if err := db.
 			Table("albums").
-			Clauses(clause.OnConflict{UpdateAll: true}).
+			Clauses(clause.OnConflict{DoNothing: true}).
 			Create(album).
 			Error; err != nil {
 			return fmt.Errorf("error inserting album '%s': %w", album.SpotifyID, err)
