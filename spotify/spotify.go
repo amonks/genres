@@ -82,10 +82,9 @@ func (spo *Client) FetchAlbums(ctx context.Context, albumSpotifyIDs []string) ([
 		return nil, fmt.Errorf("albums tracks decode error: %w", err)
 	}
 
-	var albums []data.Album
-
-	for _, fetched := range results.Albums {
-		album := data.Album{
+	albums := make([]data.Album, len(results.Albums))
+	for i, fetched := range results.Albums {
+		albums[i] = data.Album{
 			SpotifyID:            fetched.ID,
 			Name:                 fetched.Name,
 			Type:                 fetched.AlbumType,
@@ -95,19 +94,31 @@ func (spo *Client) FetchAlbums(ctx context.Context, albumSpotifyIDs []string) ([
 			ReleaseDate:          fetched.ReleaseDate,
 			ReleaseDatePrecision: fetched.ReleaseDatePrecision,
 			Artists:              make([]data.Artist, len(fetched.Artists)),
-			Tracks:               make([]data.Track, fetched.Tracks.Total),
+			Tracks:               make([]data.Track, len(fetched.Tracks.Items)),
 			Genres:               fetched.Genres,
 			Popularity:           fetched.Popularity,
 		}
-		for _, track := range fetched.Tracks.Items {
+		for j, artist := range fetched.Artists {
+			if artist.ID == "" {
+				return nil, fmt.Errorf("no id for album-artist %d", j)
+			}
+			albums[i].Artists[j] = data.Artist{
+				SpotifyID: artist.ID,
+				Name:      artist.Name,
+			}
+		}
+		for j, track := range fetched.Tracks.Items {
 			artists := make([]data.Artist, len(track.Artists))
-			for i, artist := range track.Artists {
-				artists[i] = data.Artist{
+			for k, artist := range track.Artists {
+				if artist.ID == "" {
+					return nil, fmt.Errorf("no id for track-artist %d on '%s'", k, track.ID)
+				}
+				artists[k] = data.Artist{
 					SpotifyID: artist.ID,
 					Name:      artist.Name,
 				}
 			}
-			album.Tracks = append(album.Tracks, data.Track{
+			albums[i].Tracks[j] = data.Track{
 				SpotifyID:  track.ID,
 				Name:       track.Name,
 				Popularity: track.Popularity,
@@ -117,11 +128,16 @@ func (spo *Client) FetchAlbums(ctx context.Context, albumSpotifyIDs []string) ([
 				DiscNumber:     track.DiscNumber,
 				TrackNumber:    track.TrackNumber,
 				Artists:        artists,
-			})
+			}
 		}
-		if len(fetched.Tracks.Items) <= fetched.Tracks.Total {
+
+		// Skip paginated tracks if we already got all of 'em on the
+		// first page.
+		if len(fetched.Tracks.Items) >= fetched.Tracks.Total {
 			continue
 		}
+
+		// Fetch pages upon pages of tracks if need be.
 		for offset := 50; offset < 1000; offset += 50 {
 			query := url.Values{}
 			query.Add("limit", "50")
@@ -141,12 +157,15 @@ func (spo *Client) FetchAlbums(ctx context.Context, albumSpotifyIDs []string) ([
 			for _, track := range results.Items {
 				artists := make([]data.Artist, len(track.Artists))
 				for i, artist := range track.Artists {
+					if artist.ID == "" {
+						return nil, fmt.Errorf("no id for track-artist %d on '%s'", i, track.ID)
+					}
 					artists[i] = data.Artist{
 						SpotifyID: artist.ID,
 						Name:      artist.Name,
 					}
 				}
-				album.Tracks = append(album.Tracks, data.Track{
+				albums[i].Tracks = append(albums[i].Tracks, data.Track{
 					SpotifyID:  track.ID,
 					Name:       track.Name,
 					Popularity: track.Popularity,
@@ -587,7 +606,8 @@ func (spo *Client) get(ctx context.Context, baseURL string, query url.Values) (i
 	if _, err := os.Stat(cacheFilename); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("error checking for cache file '%s': %w", hash, err)
 	} else if err == nil {
-		cache, err := os.OpenFile(cacheFilename, os.O_RDONLY, 0o666)
+		log.Printf("[spotify] cache hit for '%s'", hash)
+		cache, err := os.Open(cacheFilename)
 		if err != nil {
 			return nil, fmt.Errorf("error opening cache file '%s' for read: %w", hash, err)
 		}
@@ -655,7 +675,7 @@ retry:
 
 	spo.nextReqAt = time.Now().Add(spo.delay)
 
-	cache, err := os.OpenFile(cacheFilename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
+	cache, err := os.Create(cacheFilename)
 	if err != nil {
 		return nil, fmt.Errorf("error opening cache file '%s' for write: %w", hash, err)
 	}

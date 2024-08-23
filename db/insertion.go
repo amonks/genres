@@ -130,7 +130,7 @@ func (db *DB) PopulateAlbum(ctx context.Context, album *data.Album) error {
 	defer db.hold()()
 
 	if album.SpotifyID == "" {
-		return fmt.Errorf("no spotify id")
+		return fmt.Errorf("no spotify id for album")
 	}
 
 	return db.rw.Transaction(func(db *gorm.DB) error {
@@ -186,7 +186,7 @@ func (db *DB) PopulateAlbum(ctx context.Context, album *data.Album) error {
 
 		for _, artist := range album.Artists {
 			if artist.SpotifyID == "" {
-				return fmt.Errorf("no spotify id")
+				return fmt.Errorf("no spotify id for artist in PopulateAlbum")
 			}
 
 			if err := db.
@@ -216,6 +216,9 @@ func (db *DB) PopulateAlbum(ctx context.Context, album *data.Album) error {
 		}
 
 		for _, track := range album.Tracks {
+			if track.SpotifyID == "" {
+				return fmt.Errorf("no SpotifyID for track in PopulateAlbum")
+			}
 			if err := db.
 				Table("tracks").
 				Clauses(clause.OnConflict{DoNothing: true}).

@@ -29,21 +29,16 @@ func runAlbumTracksFetcher(ctx context.Context, c chan<- struct{}, db *db.DB, sp
 		if err != nil {
 			return err
 		}
+		if len(fetched) != len(albums) {
+			return fmt.Errorf("expected %d albums but got %d", len(albums), len(fetched))
+		}
+
 		for _, album := range fetched {
-			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("canceled: %w", err)
-			}
 			if err := db.PopulateAlbum(ctx, &album); err != nil {
 				return err
 			}
-			for _, track := range album.Tracks {
-				if err := ctx.Err(); err != nil {
-					return fmt.Errorf("canceled: %w", err)
-				}
-
-				if err := db.InsertTrack(ctx, &track); err != nil {
-					return err
-				}
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("canceled: %w", err)
 			}
 		}
 
