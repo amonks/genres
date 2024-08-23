@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -32,11 +33,10 @@ func (db *DB) MarkArtistAlbumsFetched(artistSpotifyID string) error {
 	if artistSpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
-	now := time.Now()
 	if err := db.rw.
 		Table("artists").
 		Where("spotify_id = ?", artistSpotifyID).
-		Update("fetched_albums_at", &now).
+		Update("fetched_albums_at", sql.NullTime{Time: time.Now(), Valid: true}).
 		Error; err != nil {
 		return fmt.Errorf("error marking artist '%s' albums as fetched: %w", artistSpotifyID, err)
 	}
@@ -49,11 +49,10 @@ func (db *DB) MarkGenreFetched(genreName string) error {
 	if genreName == "" {
 		return fmt.Errorf("no spotify id")
 	}
-	now := time.Now()
 	if err := db.rw.
 		Table("genres").
 		Where("name = ?", genreName).
-		Update("fetched_artists_at", &now).
+		Update("fetched_artists_at", sql.NullTime{Time: time.Now(), Valid: true}).
 		Error; err != nil {
 		return fmt.Errorf("error marking genre '%s' as fetched: %w", genreName, err)
 	}
@@ -66,11 +65,10 @@ func (db *DB) MarkArtistFetched(artistSpotifyID string) error {
 	if artistSpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
-	now := time.Now()
 	if err := db.rw.
 		Table("artists").
 		Where("spotify_id = ?", artistSpotifyID).
-		Update("fetched_tracks_at", &now).
+		Update("fetched_tracks_at", sql.NullTime{Time: time.Now(), Valid: true}).
 		Error; err != nil {
 		return fmt.Errorf("error marking artist '%s' as fetched: %w", artistSpotifyID, err)
 	}
@@ -80,11 +78,10 @@ func (db *DB) MarkArtistFetched(artistSpotifyID string) error {
 func (db *DB) MarkTrackAnalysisFailed(tracks []string) error {
 	defer db.hold()()
 
-	now := time.Now()
 	if err := db.rw.
 		Table("tracks").
 		Where("spotify_id in ?", tracks).
-		Update("failed_analysis_at", &now).
+		Update("failed_analysis_at", sql.NullTime{Time: time.Now(), Valid: true}).
 		Error; err != nil {
 		return fmt.Errorf("error marking %d tracks as failed", len(tracks))
 	}
@@ -97,12 +94,11 @@ func (db *DB) AddTrackAnalysis(track *data.Track) error {
 	if track.SpotifyID == "" {
 		return fmt.Errorf("no spotify id")
 	}
-	now := time.Now()
 	if err := db.rw.
 		Table("tracks").
 		Where("spotify_id = ?", track.SpotifyID).
 		Updates(map[string]interface{}{
-			"fetched_analysis_at": &now,
+			"fetched_analysis_at": sql.NullTime{Time: time.Now(), Valid: true},
 
 			"key":            track.Key,
 			"mode":           track.Mode,
@@ -131,11 +127,10 @@ func (db *DB) PopulateAlbum(ctx context.Context, album *data.Album) error {
 		return fmt.Errorf("no spotify id")
 	}
 	return db.rw.Transaction(func(db *gorm.DB) error {
-		now := time.Now()
 		if err := db.
 			Where("spotify_id = ?", album.SpotifyID).
 			Updates(map[string]any{
-				"fetched_tracks_at":      &now,
+				"fetched_tracks_at":      sql.NullTime{Time: time.Now(), Valid: true},
 				"name":                   album.Name,
 				"type":                   album.Type,
 				"image_url":              album.ImageURL,
@@ -348,8 +343,8 @@ func (db *DB) InsertTrack(ctx context.Context, track *data.Track) error {
 	})
 }
 
-// InsertArtist, given an Artist, inserts the appropriate data into the artists,
-// artist_genres, and artists_rtree tables, doing nothing if they already exist.
+// InsertArtist, given an Artist, inserts the appropriate data into the artists
+// and artist_genres tables, doing nothing if they already exist.
 func (db *DB) InsertArtist(ctx context.Context, artist *data.Artist) error {
 	defer db.hold()()
 
@@ -363,68 +358,6 @@ func (db *DB) InsertArtist(ctx context.Context, artist *data.Artist) error {
 			Create(artist).
 			Error; err != nil {
 			return fmt.Errorf("error inserting artist '%s' into artists: %w", artist.Name, err)
-		}
-		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("canceled: %w", err)
-		}
-
-		var rowid int64
-		if err := db.
-			Table("artists").
-			Select("rowid").
-			Where("spotify_id = ?", artist.SpotifyID).
-			Scan(&rowid).
-			Error; err != nil {
-			return fmt.Errorf("error fetching rowid for inserted artist '%s': %w", artist.Name, err)
-		}
-		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("canceled: %w", err)
-		}
-
-		var stats struct {
-			MinEnergy, MaxEnergy                     int64
-			MinDynamicVariation, MaxDynamicVariation int64
-			MinInstrumentalness, MaxInstrumentalness int64
-			MinOrganicness, MaxOrganicness           int64
-			MinBounciness, MaxBounciness             int64
-		}
-
-		if err := db.
-			Table("genres").
-			Where("name in ?", artist.Genres).
-			Select(
-				"min(energy) as min_energy",
-				"max(energy) as max_energy",
-
-				"min(dynamic_variation) as min_dynamic_variation",
-				"max(dynamic_variation) as max_dynamic_variation",
-
-				"min(instrumentalness) as min_instrumentalness",
-				"max(instrumentalness) as max_instrumentalness",
-
-				"min(organicness) as min_organicness",
-				"max(organicness) as max_organicness",
-
-				"min(bounciness) as min_bounciness",
-				"max(bounciness) as max_bounciness",
-			).
-			Scan(&stats).
-			Error; err != nil {
-			return fmt.Errorf("error fetching genre stats while inserting artist '%s': %w", artist.Name, err)
-		}
-		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("canceled: %w", err)
-		}
-
-		if err := db.Exec(`insert or ignore into artists_rtree values (?, ?,?, ?,?, ?,?, ?,?, ?,?)`,
-			rowid,
-			stats.MinEnergy, stats.MaxEnergy,
-			stats.MinDynamicVariation, stats.MaxDynamicVariation,
-			stats.MinInstrumentalness, stats.MaxInstrumentalness,
-			stats.MinOrganicness, stats.MaxOrganicness,
-			stats.MinBounciness, stats.MaxBounciness,
-		).Error; err != nil {
-			return fmt.Errorf("error inserting stats into artists_rtree for artist '%s': %w", artist.Name, err)
 		}
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("canceled: %w", err)

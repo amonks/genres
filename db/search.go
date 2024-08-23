@@ -2,8 +2,8 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/amonks/genres/data"
@@ -73,19 +73,8 @@ func (db *DB) GetTracksToIndex(ctx context.Context, limit int) ([]data.Track, er
 }
 
 func (db *DB) IndexTracks(ctx context.Context, tracks []data.Track) error {
-	inserts := make([]data.TracksSearch, len(tracks))
 	ids := make([]string, len(tracks))
 	for i, track := range tracks {
-		var content []string
-		content = append(content, track.Name)
-		content = append(content, track.AlbumName)
-		for _, artist := range track.Artists {
-			content = append(content, artist.Name)
-		}
-		inserts[i] = data.TracksSearch{
-			TrackSpotifyID: track.SpotifyID,
-			Content:        strings.Join(content, "\n"),
-		}
 		ids[i] = track.SpotifyID
 	}
 
@@ -93,8 +82,7 @@ func (db *DB) IndexTracks(ctx context.Context, tracks []data.Track) error {
 
 	return db.rw.Transaction(func(tx *gorm.DB) error {
 		if err := tx.
-			Table("tracks_search").
-			Create(inserts).
+			Exec("insert into tracks_search select * from tracks_with_artist_names where spotify_id in ?", ids).
 			Error; err != nil {
 			return fmt.Errorf("error inserting %d tracks into search index: %w", len(tracks), err)
 		}
@@ -103,11 +91,10 @@ func (db *DB) IndexTracks(ctx context.Context, tracks []data.Track) error {
 			return fmt.Errorf("canceled: %w", err)
 		}
 
-		now := time.Now()
 		if err := tx.
 			Table("tracks").
 			Where("spotify_id in ?", ids).
-			Update("indexed_search_at", &now).
+			Update("indexed_search_at", sql.NullTime{Time: time.Now(), Valid: true}).
 			Error; err != nil {
 			return fmt.Errorf("error marking %d tracks as indexed: %w", len(ids), err)
 		}

@@ -2,6 +2,7 @@ package spotify
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -76,7 +77,6 @@ func (spo *Client) FetchAlbums(ctx context.Context, albumSpotifyIDs []string) ([
 
 	var albums []data.Album
 
-	now := time.Now()
 
 	for _, fetched := range results.Albums {
 		album := data.Album{
@@ -85,7 +85,7 @@ func (spo *Client) FetchAlbums(ctx context.Context, albumSpotifyIDs []string) ([
 			Type:                 fetched.AlbumType,
 			ImageURL:             fetched.Images[0].URL,
 			TotalTracks:          fetched.TotalTracks,
-			FetchedTracksAt:      &now,
+			FetchedTracksAt:      sql.NullTime{Time: time.Now(), Valid: true},
 			ReleaseDate:          fetched.ReleaseDate,
 			ReleaseDatePrecision: fetched.ReleaseDatePrecision,
 			Artists:              make([]data.Artist, len(fetched.Artists)),

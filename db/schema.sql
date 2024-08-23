@@ -2,6 +2,10 @@
 -- connections to the database without corrupting data.
 pragma journal_mode='wal';
 
+
+-- GENRES
+--
+
 -- Genres holds the list of genres extracted from
 -- everynoise.com.
 --
@@ -20,19 +24,16 @@ create table if not exists genres (
 
         popularity        real,
 
-        fetched_artists_at text
+        fetched_artists_at datetime
 );
 
 create index if not exists genres_by_fetched_artists_at on genres ( fetched_artists_at );
 
--- Artists holds the artists we've found using Spotify's search API. We try to
--- fetch the thousand first artists returned by a search for each genre.
+
+-- ARTISTS
 --
--- Artists have many genres via the association table artist_genres.
---
--- Artists also have an rtree representing their bounds in genre-space. The 'id'
--- column in artists_rtree references the automatically-generated 'rowid' column
--- in artists.
+
+-- Artists holds the artists we've found using Spotify's search API.
 create table if not exists artists (
         spotify_id text primary key,
         name       text,
@@ -40,12 +41,20 @@ create table if not exists artists (
         followers  integer,
         popularity integer,
 
-        fetched_tracks_at text,
-        fetched_albums_at text
+        fetched_tracks_at       datetime,
+        fetched_albums_at       datetime,
+        indexed_genres_rtree_at datetime,
+        indexed_tracks_rtree_at datetime
 );
 
-create index if not exists artists_by_fetched_tracks_at on artists ( fetched_tracks_at );
-create index if not exists artists_by_fetched_albums_at on artists ( fetched_albums_at );
+create index if not exists artists_by_fetched_tracks_at       on artists ( fetched_tracks_at );
+create index if not exists artists_by_fetched_albums_at       on artists ( fetched_albums_at );
+create index if not exists artists_by_indexed_genres_rtree_at on artists ( indexed_genres_rtree_at );
+create index if not exists artists_by_indexed_tracks_rtree_at on artists ( indexed_tracks_rtree_at );
+
+
+-- ALBUMS
+--
 
 create table if not exists albums (
         spotify_id   text primary key,
@@ -61,39 +70,16 @@ create table if not exists albums (
         -- Allowed values: "year", "month", "day"
         release_date_precision text,
 
-        fetched_tracks_at text
+        fetched_tracks_at        datetime,
+        indexed_tracks_rtree_at  datetime
 );
 
 create index if not exists albums_by_fetched_tracks_at on albums ( fetched_tracks_at );
+create index if not exists indexed_tracks_rtree_at     on albums ( indexed_tracks_rtree_at );
 
--- artists_rtree stores the bounds of each artist within 5-dimensional genre
--- space, and can be used for geospatial-style range queries.
+
+-- TRACKS
 --
--- For each artist, spotify gives us a list of genres. We can imagine finding
--- all of those genres on the everynoise website and drawing a bounding box
--- around them. Then, we can point to a spot on the visualization and query for
--- the artists whose boxes contain that point.
---
--- But actually: the visualization has more than two dimensions. In addition to
--- x and y position, each genre has a color, and the three channels of that
--- color (RGB) represent additional data.
-create virtual table if not exists artists_rtree using rtree(
-        id,
-        min_energy, max_energy,
-        min_dynamic_variation, max_dynamic_variation,
-        min_instrumentalness, max_instrumentalness,
-        min_organicness, max_organicness,
-        min_bounciness, max_bounciness
-);
-
--- artist_genres represents a many-to-many relationship between artists and
--- genres.
-create table if not exists artist_genres (
-        artist_spotify_id text references artists(spotify_id),
-        genre_name        text references genres(name),
-
-        primary key (artist_spotify_id, genre_name)
-);
 
 create table if not exists tracks (
         spotify_id   text primary key,
@@ -105,9 +91,9 @@ create table if not exists tracks (
         disc_number      integer,
         track_number     integer,
 
-        fetched_analysis_at text,
-        failed_analysis_at text,
-        indexed_search_at text,
+        fetched_analysis_at datetime,
+        failed_analysis_at  datetime,
+        indexed_search_at   datetime,
 
         key              integer,
         mode             integer,
@@ -143,6 +129,55 @@ create index if not exists tracks_by_loudness          on tracks ( loudness     
 create index if not exists tracks_by_speechiness       on tracks ( speechiness      );
 create index if not exists tracks_by_valence           on tracks ( valence          );
 
+create view if not exists tracks_with_artist_names as
+        select
+                tracks.spotify_id as spotify_id,
+                tracks.name as name,
+                tracks.album_name as album_name,
+                group_concat(artists.name, ' ') as artist_names,
+                tracks.popularity as popularity
+        from
+                tracks
+                        left join track_artists on tracks.spotify_id = track_artists.track_spotify_id
+                        left join artists on track_artists.artist_spotify_id = artists.spotify_id
+        group by tracks.spotify_id
+        order by tracks.spotify_id asc;
+
+create virtual table if not exists tracks_search using fts5(
+        spotify_id,
+        name,
+        album_name,
+        artist_names,
+        popularity
+);
+
+
+-- ARTIST_GENRES
+--
+
+create table if not exists artist_genres (
+        artist_spotify_id text references artists(spotify_id),
+        genre_name        text references genres(name),
+
+        primary key (artist_spotify_id, genre_name)
+);
+
+create index if not exists artist_genres_by_artist_spotify_id on artist_genres ( artist_spotify_id );
+create index if not exists artist_genres_by_genre_name        on artist_genres ( genre_name );
+
+create virtual table if not exists artist_genres_rtree using rtree(
+        id,
+        min_energy, max_energy,
+        min_dynamic_variation, max_dynamic_variation,
+        min_instrumentalness, max_instrumentalness,
+        min_organicness, max_organicness,
+        min_bounciness, max_bounciness
+);
+
+
+-- TRACK_ARTISTS
+--
+
 create table if not exists track_artists (
         track_spotify_id  text references tracks(spotify_id),
         artist_spotify_id text references artists(spotify_id),
@@ -152,6 +187,19 @@ create table if not exists track_artists (
 
 create index if not exists track_artists_by_track  on track_artists (track_spotify_id);
 create index if not exists track_artists_by_artist on track_artists (artist_spotify_id);
+
+create virtual table if not exists artist_tracks_rtree using rtree(
+        id,
+        min_energy, max_energy,
+        min_dynamic_variation, max_dynamic_variation,
+        min_instrumentalness, max_instrumentalness,
+        min_organicness, max_organicness,
+        min_bounciness, max_bounciness
+);
+
+
+-- ALBUM_ARTISTS
+--
 
 create table if not exists album_artists (
         artist_spotify_id text references artists(spotify_id),
@@ -163,6 +211,10 @@ create table if not exists album_artists (
 create index if not exists album_artists_by_album  on album_artists (album_spotify_id);
 create index if not exists album_artists_by_artist on album_artists (artist_spotify_id);
 
+
+-- ALBUM_TRACKS
+--
+
 create table if not exists album_tracks (
         album_spotify_id text references albums(spotify_id),
         track_spotify_id text references tracks(spotify_id),
@@ -173,7 +225,13 @@ create table if not exists album_tracks (
 create index if not exists album_tracks_by_album  on album_tracks (album_spotify_id);
 create index if not exists album_tracks_by_track  on album_tracks (track_spotify_id);
 
-create virtual table if not exists tracks_search using fts5(
-        track_spotify_id,
-        content,
+create virtual table if not exists album_tracks_rtree using rtree(
+        id,
+        min_energy, max_energy,
+        min_dynamic_variation, max_dynamic_variation,
+        min_instrumentalness, max_instrumentalness,
+        min_organicness, max_organicness,
+        min_bounciness, max_bounciness
 );
+
+
