@@ -77,7 +77,6 @@ func (spo *Client) FetchAlbums(ctx context.Context, albumSpotifyIDs []string) ([
 
 	var albums []data.Album
 
-
 	for _, fetched := range results.Albums {
 		album := data.Album{
 			SpotifyID:            fetched.ID,
@@ -90,6 +89,8 @@ func (spo *Client) FetchAlbums(ctx context.Context, albumSpotifyIDs []string) ([
 			ReleaseDatePrecision: fetched.ReleaseDatePrecision,
 			Artists:              make([]data.Artist, len(fetched.Artists)),
 			Tracks:               make([]data.Track, fetched.Tracks.Total),
+			Genres:               fetched.Genres,
+			Popularity:           fetched.Popularity,
 		}
 		for _, track := range fetched.Tracks.Items {
 			artists := make([]data.Artist, len(track.Artists))
@@ -196,6 +197,8 @@ type albumsTracks struct {
 				}
 			}
 		}
+		Genres     []string
+		Popularity int64
 	}
 }
 

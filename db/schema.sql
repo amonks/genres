@@ -64,6 +64,7 @@ create table if not exists albums (
         type         text,
         total_tracks integer,
         image_url    text,
+        popularity   integer,
 
         -- Example: "1981-12"
         release_date           text,
@@ -235,3 +236,15 @@ create virtual table if not exists album_tracks_rtree using rtree(
 );
 
 
+-- ALBUM_GENRES
+--
+
+create table if not exists album_genres (
+        album_spotify_id text references albums(spotify_id),
+        genre_name text references genres(name),
+
+        primary key (album_spotify_id, genre_name)
+);
+
+create index if not exists album_genres_by_album on album_genres ( album_spotify_id );
+create index if not exists album_genres_by_genre on album_genres ( genre_name );
