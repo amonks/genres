@@ -123,19 +123,32 @@ func (eng *engine) start(ctx context.Context) error {
 	return nil
 }
 
-func Run(ctx context.Context, db *db.DB, spo *spotify.Client) error {
+func Run(ctx context.Context, db *db.DB, spo *spotify.Client, workers []string) error {
 	eng := engine{
 		workers: map[string]worker{},
 	}
 
-	eng.add("album_tracks", func(ctx context.Context, c chan<- struct{}) error { return runAlbumTracksFetcher(ctx, c, db, spo) })
-	eng.add("artist_albums", func(ctx context.Context, c chan<- struct{}) error { return runArtistAlbumsFetcher(ctx, c, db, spo) })
-	eng.add("artist_tracks", func(ctx context.Context, c chan<- struct{}) error { return runArtistTracksFetcher(ctx, c, db, spo) })
-	eng.add("genre_artists", func(ctx context.Context, c chan<- struct{}) error { return runGenreArtistsFetcher(ctx, c, db, spo) })
-	eng.add("genres", func(ctx context.Context, c chan<- struct{}) error { return runGenresFetcher(ctx, c, db) })
+	for _, worker := range workers {
+		switch worker {
+		case "album_tracks":
+			eng.add("album_tracks", func(ctx context.Context, c chan<- struct{}) error { return runAlbumTracksFetcher(ctx, c, db, spo) })
+		case "artist_albums":
+			eng.add("artist_albums", func(ctx context.Context, c chan<- struct{}) error { return runArtistAlbumsFetcher(ctx, c, db, spo) })
+		case "artist_tracks":
+			eng.add("artist_tracks", func(ctx context.Context, c chan<- struct{}) error { return runArtistTracksFetcher(ctx, c, db, spo) })
+		case "genre_artists":
+			eng.add("genre_artists", func(ctx context.Context, c chan<- struct{}) error { return runGenreArtistsFetcher(ctx, c, db, spo) })
+		case "genres":
+			eng.add("genres", func(ctx context.Context, c chan<- struct{}) error { return runGenresFetcher(ctx, c, db) })
+		case "track_analysis":
+			eng.add("track_analysis", func(ctx context.Context, c chan<- struct{}) error { return runTrackAnalysisFetcher(ctx, c, db, spo) })
+			eng.add("indexer", func(ctx context.Context, c chan<- struct{}) error { return runIndexer(ctx, c, db) })
+		default:
+			return fmt.Errorf("unsupported worker '%s'", worker)
+		}
+	}
+
 	eng.add("reporter", func(ctx context.Context, c chan<- struct{}) error { return runReporter(ctx, c, db, time.Minute*10) })
-	eng.add("indexer", func(ctx context.Context, c chan<- struct{}) error { return runIndexer(ctx, c, db) })
-	eng.add("track_analysis", func(ctx context.Context, c chan<- struct{}) error { return runTrackAnalysisFetcher(ctx, c, db, spo) })
 
 	return eng.start(ctx)
 }
