@@ -619,10 +619,15 @@ retry:
 	if err != nil {
 		return nil, fmt.Errorf("request error: %w", err)
 	}
-	if resp.StatusCode == 429 {
+	switch resp.StatusCode {
+	case 429:
 		if err := spo.lim.SetNextAt(resp.Header.Get("Retry-After")); err != nil {
 			return nil, err
 		}
+		goto retry
+
+	case 502:
+		spo.lim.DelayBy(time.Minute)
 		goto retry
 	}
 	if err := request.Error(resp); err != nil {

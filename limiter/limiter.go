@@ -88,5 +88,9 @@ func (lim *Limiter) SetNextAt(secondsStr string) error {
 }
 
 func (lim *Limiter) Delay() {
+	lim.DelayBy(lim.delay)
+}
+
+func (lim *Limiter) DelayBy(time.Duration) {
 	lim.nextAt = time.Now().Add(lim.delay)
 }
