@@ -276,7 +276,10 @@ func (spo *Client) FetchArtistAlbums(ctx context.Context, artistSpotifyID string
 		if err != nil {
 			return nil, err
 		}
-		for _, album := range resp.Items {
+		for i, album := range resp.Items {
+			if album.ID == "" {
+				return nil, fmt.Errorf("empty spotify id for album %d", i)
+			}
 			var imageURL string
 			if len(album.Images) > 0 {
 				imageURL = album.Images[0].URL
