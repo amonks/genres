@@ -165,7 +165,7 @@ func (db *DB) CountTracksWithFetchedAnalysis() (int, error) {
 	var count int64
 	if err := db.ro.
 		Table("tracks").
-		Where("fetched_analysis_at is not null").
+		Where("fetched_analysis_at is not null or failed_analysis_at is not null").
 		Count(&count).
 		Error; err != nil {
 		return 0, err
@@ -177,7 +177,7 @@ func (db *DB) CountTracksToFetchAnalysis() (int, error) {
 	var count int64
 	if err := db.ro.
 		Table("tracks").
-		Where("fetched_analysis_at is null").
+		Where("fetched_analysis_at is null and failed_analysis_at is null").
 		Count(&count).
 		Error; err != nil {
 		return 0, err
@@ -190,8 +190,7 @@ func (db *DB) GetTracksToFetchAnalysis(limit int) ([]string, error) {
 	if err := db.ro.
 		Table("tracks").
 		Limit(limit).
-		Where("fetched_analysis_at is null").
-		Where("failed_analysis_at is null").
+		Where("fetched_analysis_at is null and failed_analysis_at is null").
 		Pluck("spotify_id", &tracks).
 		Error; err != nil {
 		return nil, err
@@ -285,7 +284,7 @@ func (db *DB) CountTracksDone() (int, error) {
 	var count int64
 	if err := db.ro.
 		Table("tracks").
-		Where("fetched_analysis_at is not null").
+		Where("fetched_analysis_at is not null or failed_analysis_at is not null").
 		Count(&count).
 		Error; err != nil {
 		return 0, err
