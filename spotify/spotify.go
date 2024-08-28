@@ -75,11 +75,15 @@ func (spo *Client) FetchAlbums(ctx context.Context, albumSpotifyIDs []string) ([
 
 	albums := make([]data.Album, len(results.Albums))
 	for i, fetched := range results.Albums {
+		var imageURL string
+		if len(fetched.Images) > 0 {
+			imageURL = fetched.Images[0].URL
+		}
 		albums[i] = data.Album{
 			SpotifyID:            fetched.ID,
 			Name:                 fetched.Name,
 			Type:                 fetched.AlbumType,
-			ImageURL:             fetched.Images[0].URL,
+			ImageURL:             imageURL,
 			TotalTracks:          fetched.TotalTracks,
 			FetchedTracksAt:      sql.NullTime{Time: time.Now(), Valid: true},
 			ReleaseDate:          fetched.ReleaseDate,
