@@ -10,14 +10,14 @@ import (
 	"github.com/amonks/genres/spotify"
 )
 
-func runAlbumTracksFetcher(ctx context.Context, c chan<- struct{}, db *db.DB, spo *spotify.Client) error {
+func runAlbumTracksRefetcher(ctx context.Context, c chan<- struct{}, db *db.DB, spo *spotify.Client) error {
 	for {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("canceled: %w", err)
 		}
 
 		const count = 20
-		albums, err := db.GetAlbumsToFetchTracks(count)
+		albums, err := db.GetAlbumsToRefetchTracks(count)
 		if err != nil {
 			return err
 		}

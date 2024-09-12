@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"strings"
 	"sync"
@@ -23,7 +24,8 @@ import (
 
 const (
 	nextReqFilename = "next-req"
-	cacheDir        = "req-cache"
+	cacheDir        = "/data/tank/genres/req-cache"
+	// cacheDir = "req-cache"
 )
 
 // New creates a new Spotify client, with the given clientID and clientSecret.
@@ -221,26 +223,6 @@ type albumsTracks struct {
 		Genres     []string
 		Popularity int64
 	}
-}
-
-func (spo *Client) fetchAlbumTracksPage(ctx context.Context, albumSpotifyID string, offset int) (*albumTracksPage, error) {
-	query := url.Values{}
-	query.Add("limit", "50")
-	query.Add("offset", fmt.Sprintf("%d", offset))
-
-	resp, err := spo.get(ctx, fmt.Sprintf("https://api.spotify.com/v1/albums/%s/tracks", albumSpotifyID), query)
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Close()
-	var results albumTracksPage
-	dec := json.NewDecoder(resp)
-	if err := dec.Decode(&results); err != nil {
-		return nil, fmt.Errorf("album tracks decode error: %w", err)
-	}
-
-	return &results, nil
 }
 
 type albumTracksPage struct {
@@ -592,6 +574,8 @@ type genreSearchResultsPage struct {
 	}
 }
 
+var ErrSpotify = errors.New("<spotify error>")
+
 func (spo *Client) get(ctx context.Context, baseURL string, query url.Values) (io.ReadCloser, error) {
 	spo.mu.Lock()
 	defer spo.mu.Unlock()
@@ -638,7 +622,13 @@ retry:
 		goto retry
 	}
 	if err := request.Error(resp); err != nil {
-		return nil, fmt.Errorf("fetch error: %w", err)
+		bs, dumpErr := httputil.DumpRequest(req, false)
+		if dumpErr != nil {
+			log.Printf("error dumping request: %s", dumpErr)
+			return nil, errors.Join(ErrSpotify, fmt.Errorf("error fetching:\n--req--\n%s\n--error--\n%w\n^^^^^^^^^", url.String(), err))
+		} else {
+			return nil, errors.Join(ErrSpotify, fmt.Errorf("error fetching:\n%s\n--resp--\n%w\n^^^^^^^^", string(bs), err))
+		}
 	}
 
 	spo.lim.Delay()

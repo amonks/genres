@@ -29,11 +29,16 @@ func (eng *engine) add(name string, f func(context.Context, chan<- struct{}) err
 	eng.workers[name] = worker{f: f}
 }
 
+type report struct {
+	name string
+	dur  time.Duration
+}
+
 func (eng *engine) start(ctx context.Context) error {
 	ctx, cancel := context.WithCancelCause(ctx)
 
 	g := new(errgroup.Group)
-	events := make(chan string)
+	events := make(chan report)
 
 	run := func(name string) {
 		worker := eng.workers[name]
@@ -44,11 +49,14 @@ func (eng *engine) start(ctx context.Context) error {
 		g.Go(func() error {
 			theseEvents := make(chan struct{})
 			go func() {
+				start := time.Now()
 				for range theseEvents {
-					events <- name
+					now := time.Now()
+					dur := now.Sub(start).Truncate(time.Millisecond * 10)
+					start = now
+					events <- report{name, dur}
 				}
 			}()
-			log.Printf("start:\t%s", name)
 			if theseEvents == nil {
 				return fmt.Errorf("theseEvents is nil")
 			}
@@ -59,8 +67,6 @@ func (eng *engine) start(ctx context.Context) error {
 			if err != nil {
 				log.Printf("error:\t%s\t%s", name, err)
 				cancel(err)
-			} else {
-				log.Printf("done:\t%s", name)
 			}
 			go func() {
 				eng.mu.Lock()
@@ -87,7 +93,7 @@ func (eng *engine) start(ctx context.Context) error {
 		eng.mu.Lock()
 		defer eng.mu.Unlock()
 
-		if eng.workers[name].isRunning {
+		if worker, has := eng.workers[name]; has && worker.isRunning {
 			return
 		}
 
@@ -95,8 +101,10 @@ func (eng *engine) start(ctx context.Context) error {
 	}
 
 	go func() {
-		for ev := range events {
-			log.Printf("batch:\t%s", ev)
+		for rep := range events {
+			ev, dur := rep.name, rep.dur
+
+			log.Printf("batch (%s):\t%s", dur, ev)
 
 			switch ev {
 
@@ -143,6 +151,8 @@ func Run(ctx context.Context, db *db.DB, spo *spotify.Client, workers []string) 
 		case "track_analysis":
 			eng.add("track_analysis", func(ctx context.Context, c chan<- struct{}) error { return runTrackAnalysisFetcher(ctx, c, db, spo) })
 			eng.add("indexer", func(ctx context.Context, c chan<- struct{}) error { return runIndexer(ctx, c, db) })
+		case "album_tracks_refetch":
+			eng.add("album_tracks_refetch", func(ctx context.Context, c chan<- struct{}) error { return runAlbumTracksRefetcher(ctx, c, db, spo) })
 		default:
 			return fmt.Errorf("unsupported worker '%s'", worker)
 		}

@@ -2,7 +2,9 @@ package workers
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 
 	"github.com/amonks/genres/db"
 	"github.com/amonks/genres/spotify"
@@ -25,7 +27,13 @@ func runGenreArtistsFetcher(ctx context.Context, c chan<- struct{}, db *db.DB, s
 		genreName := genres[0]
 
 		artists, err := spo.FetchGenre(ctx, genreName)
-		if err != nil {
+		if err != nil && errors.Is(err, spotify.ErrSpotify) {
+			if markErr := db.MarkGenreFailed(genreName); markErr != nil {
+				return markErr
+			}
+			log.Printf("failed to fetch genre %s: %s", genreName, err)
+			return nil
+		} else if err != nil {
 			return err
 		}
 		if len(artists) == 0 {

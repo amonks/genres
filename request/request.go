@@ -2,8 +2,8 @@ package request
 
 import (
 	"fmt"
-	"io"
 	"net/http"
+	"net/http/httputil"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -36,12 +36,11 @@ func FetchHTML(url string) (*goquery.Document, error) {
 // present, reads the body and returns a friendly error.
 func Error(resp *http.Response) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		defer resp.Body.Close()
-		bs, err := io.ReadAll(resp.Body)
+		bs, err := httputil.DumpResponse(resp, true)
 		if err != nil {
 			return fmt.Errorf("http status code %d; error decoding body: %w", resp.StatusCode, err)
 		} else {
-			return fmt.Errorf("http status code %d: %s", resp.StatusCode, string(bs))
+			return fmt.Errorf("http status code %d:\n%s", resp.StatusCode, string(bs))
 		}
 	}
 	return nil

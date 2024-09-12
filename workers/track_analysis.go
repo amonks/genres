@@ -2,7 +2,6 @@ package workers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/amonks/genres/db"
@@ -47,17 +46,8 @@ func runTrackAnalysisFetcher(ctx context.Context, c chan<- struct{}, db *db.DB, 
 			}
 		}
 
-		for _, track := range analyses {
-			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("canceled: %w", err)
-			}
-			if track.SpotifyID == "" {
-				bs, _ := json.MarshalIndent(analyses, "", "  ")
-				panic(string(bs))
-			}
-			if err := db.AddTrackAnalysis(&track); err != nil {
-				return err
-			}
+		if err := db.AddTrackAnalyses(ctx, analyses); err != nil {
+			return err
 		}
 
 		c <- struct{}{}

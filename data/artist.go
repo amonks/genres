@@ -13,6 +13,8 @@ type Artist struct {
 
 	FetchedTracksAt      sql.NullTime
 	FetchedAlbumsAt      sql.NullTime
+	FailedTracksAt       sql.NullTime
+	FailedAlbumsAt       sql.NullTime
 	IndexedGenresRtreeAt sql.NullTime
 	IndexedTracksRtreeAt sql.NullTime
 }

@@ -21,5 +21,6 @@ type Album struct {
 	Genres  []string `gorm:"-"`
 
 	FetchedTracksAt      sql.NullTime
+	FailedTracksAt       sql.NullTime
 	IndexedTracksRtreeAt sql.NullTime
 }

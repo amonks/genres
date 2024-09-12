@@ -14,10 +14,10 @@ func (db *DB) Search(ctx context.Context, query string, limit int) ([]data.Track
 	var ids []string
 	if err := db.ro.
 		Table("tracks_search").
-		Where("content match ?", query).
+		Where("tracks_search match ?", query).
 		Order("rank").
 		Limit(limit).
-		Pluck("track_spotify_id", &ids).
+		Pluck("spotify_id", &ids).
 		Error; err != nil {
 		return nil, err
 	}

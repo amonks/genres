@@ -10,7 +10,6 @@ import (
 )
 
 func runReporter(ctx context.Context, c chan<- struct{}, db *db.DB, duration time.Duration) error {
-
 	logfile, err := os.OpenFile("log.tsv", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		return err
@@ -19,17 +18,17 @@ func runReporter(ctx context.Context, c chan<- struct{}, db *db.DB, duration tim
 
 	var todo TODO
 	var todoErr error
-	todo, todoErr = gatherInfo(db)
+	todo, todoErr = gatherInfo(ctx, db)
 	if todoErr != nil {
-		return fmt.Errorf("reporting error: %w", err)
+		return fmt.Errorf("reporting error: %w", todoErr)
 	}
 
 	tick := time.NewTicker(duration)
 
 	for {
-		todo, todoErr = gatherInfo(db)
+		todo, todoErr = gatherInfo(ctx, db)
 		if todoErr != nil {
-			return fmt.Errorf("reporting error: %w", err)
+			return fmt.Errorf("reporting error: %w", todoErr)
 		}
 
 		fmt.Fprintf(logfile,
@@ -72,52 +71,87 @@ type TODO struct {
 	TracksKnown, TracksDone, TracksIndexed int
 }
 
-func gatherInfo(db *db.DB) (TODO, error) {
+func gatherInfo(ctx context.Context, db *db.DB) (TODO, error) {
 	todo := TODO{}
 	if count, err := db.CountTracksKnown(); err != nil {
 		return todo, err
 	} else {
 		todo.TracksKnown = count
 	}
+	if err := ctx.Err(); err != nil {
+		return TODO{}, fmt.Errorf("canceled: %w", err)
+	}
+
 	if count, err := db.CountTracksDone(); err != nil {
 		return todo, err
 	} else {
 		todo.TracksDone = count
 	}
+	if err := ctx.Err(); err != nil {
+		return TODO{}, fmt.Errorf("canceled: %w", err)
+	}
+
 	if count, err := db.CountTracksIndexed(); err != nil {
 		return todo, err
 	} else {
 		todo.TracksIndexed = count
 	}
+	if err := ctx.Err(); err != nil {
+		return TODO{}, fmt.Errorf("canceled: %w", err)
+	}
+
 	if count, err := db.CountAlbumsKnown(); err != nil {
 		return todo, err
 	} else {
 		todo.AlbumsKnown = count
 	}
+	if err := ctx.Err(); err != nil {
+		return TODO{}, fmt.Errorf("canceled: %w", err)
+	}
+
 	if count, err := db.CountAlbumsDone(); err != nil {
 		return todo, err
 	} else {
 		todo.AlbumsDone = count
 	}
+	if err := ctx.Err(); err != nil {
+		return TODO{}, fmt.Errorf("canceled: %w", err)
+	}
+
 	if count, err := db.CountArtistsKnown(); err != nil {
 		return todo, err
 	} else {
 		todo.ArtistsKnown = count
 	}
+	if err := ctx.Err(); err != nil {
+		return TODO{}, fmt.Errorf("canceled: %w", err)
+	}
+
 	if count, err := db.CountArtistAlbumsDone(); err != nil {
 		return todo, err
 	} else {
 		todo.ArtistAlbumsDone = count
 	}
+	if err := ctx.Err(); err != nil {
+		return TODO{}, fmt.Errorf("canceled: %w", err)
+	}
+
 	if count, err := db.CountArtistTracksDone(); err != nil {
 		return todo, err
 	} else {
 		todo.ArtistTracksDone = count
 	}
+	if err := ctx.Err(); err != nil {
+		return TODO{}, fmt.Errorf("canceled: %w", err)
+	}
+
 	if count, err := db.CountArtistsDone(); err != nil {
 		return todo, err
 	} else {
 		todo.ArtistsDone = count
+	}
+	if err := ctx.Err(); err != nil {
+		return TODO{}, fmt.Errorf("canceled: %w", err)
 	}
 
 	return todo, nil

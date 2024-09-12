@@ -25,4 +25,5 @@ type Genre struct {
 	Energy, DynamicVariation, Instrumentalness, Organicness, Bounciness, Popularity float64
 
 	FetchedArtistsAt sql.NullTime
+	FailedArtistsAt  sql.NullTime
 }

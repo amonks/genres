@@ -2,6 +2,7 @@ package workers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 
@@ -27,7 +28,13 @@ func runArtistTracksFetcher(ctx context.Context, c chan<- struct{}, db *db.DB, s
 		artist := artists[0]
 
 		tracks, err := spo.FetchArtistTracks(ctx, artist)
-		if err != nil {
+		if err != nil && errors.Is(err, spotify.ErrSpotify) {
+			if markErr := db.MarkArtistFailed(artist); markErr != nil {
+				return markErr
+			}
+			log.Printf("failed to fetch artist '%s': %s", artist, err)
+			return nil
+		} else if err != nil {
 			return err
 		}
 		if len(tracks) == 0 {

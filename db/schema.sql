@@ -24,10 +24,12 @@ create table if not exists genres (
 
         popularity        real,
 
-        fetched_artists_at datetime
+        fetched_artists_at datetime,
+        failed_artists_at datetime
 );
 
 create index if not exists genres_by_fetched_artists_at on genres ( fetched_artists_at );
+create index if not exists genres_by_failed_artists_at on genres ( failed_artists_at );
 
 
 -- ARTISTS
@@ -43,12 +45,16 @@ create table if not exists artists (
 
         fetched_tracks_at       datetime,
         fetched_albums_at       datetime,
+        failed_tracks_at       datetime,
+        failed_albums_at       datetime,
         indexed_genres_rtree_at datetime,
         indexed_tracks_rtree_at datetime
 );
 
 create index if not exists artists_by_fetched_tracks_at       on artists ( fetched_tracks_at );
-create index if not exists artists_by_fetched_albums_at       on artists ( fetched_albums_at );
+create index if not exists artists_by_fetched_tracks_at       on artists ( fetched_tracks_at );
+create index if not exists artists_by_failed_albums_at       on artists ( failed_albums_at );
+create index if not exists artists_by_failed_albums_at       on artists ( failed_albums_at );
 create index if not exists artists_by_indexed_genres_rtree_at on artists ( indexed_genres_rtree_at );
 create index if not exists artists_by_indexed_tracks_rtree_at on artists ( indexed_tracks_rtree_at );
 
@@ -72,10 +78,12 @@ create table if not exists albums (
         release_date_precision text,
 
         fetched_tracks_at        datetime,
+        failed_tracks_at        datetime,
         indexed_tracks_rtree_at  datetime
 );
 
 create index if not exists albums_by_fetched_tracks_at on albums ( fetched_tracks_at );
+create index if not exists albums_by_failed_tracks_at on albums ( failed_tracks_at );
 create index if not exists indexed_tracks_rtree_at     on albums ( indexed_tracks_rtree_at );
 
 

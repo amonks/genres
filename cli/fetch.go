@@ -17,10 +17,10 @@ func fetch(ctx context.Context, db *db.DB, args []string) error {
 	var allowedWorkers = []string{
 		"album_tracks",
 		"artist_albums",
-		"artist_tracks",
 		"genre_artists",
 		"genres",
 		"track_analysis",
+		"album_tracks_refetch",
 	}
 
 	subcmd := subcmd.New("fetch", "fetch data from spotify to populate the database\nrequires SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET")
